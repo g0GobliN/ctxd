@@ -43,6 +43,19 @@ export interface ProjectContextResult extends BuildContextResult {
  * An unregistered directory still works, using files alone. Degrading to a
  * smaller set of signals is correct; pretending memory exists when it does not
  * would not be.
+ *
+ * Two directories matter here and they are deliberately not the same one:
+ *
+ *   `detected.root` — the project's identity and Git state. Anchored to the
+ *                     repository root so memory stays attached to the project
+ *                     from any subdirectory.
+ *   `options.dir`   — the scope files are collected from. Exactly what the
+ *                     caller asked for.
+ *
+ * Collecting from the repository root instead would silently widen every
+ * request made from a subdirectory into a whole-repository scan — the opposite
+ * of what a minimum-useful-context tool promises, and it would inflate the
+ * "estimated context avoided" figure with files nobody asked about.
  */
 export function buildProjectContext(
   options: BuildProjectContextOptions,
@@ -76,7 +89,7 @@ export function buildProjectContext(
 
   const result = buildContext({
     task: options.task,
-    dir: detected.root,
+    dir: options.dir,
     budget: options.budget,
     project: project?.name ?? detected.name,
     extraCandidates,

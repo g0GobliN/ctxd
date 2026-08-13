@@ -1,4 +1,5 @@
 import { strict as assert } from "node:assert";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -369,6 +370,81 @@ describe("progressive retrieval", () => {
   it("returns undefined for a missing file rather than throwing", () => {
     const { db, root } = fixture("missing");
     assert.equal(contextFile(root, "src/nope.ts"), undefined);
+    db.close();
+  });
+});
+
+describe("collection scope", () => {
+  /**
+   * Regression: `buildProjectContext` used to collect files from the detected
+   * project root rather than the directory it was given. Inside a repository
+   * that silently widened every request made from a subdirectory into a
+   * whole-repository scan — and inflated "estimated context avoided" with
+   * files nobody asked about.
+   */
+  it("collects only from the directory it was given", () => {
+    const { db, root } = fixture("scope");
+
+    const wholeProject = buildProjectContext({
+      task: "stripe idempotency webhook",
+      dir: root,
+      budget: 10000,
+      db,
+      now: NOW,
+    });
+
+    const subdirectory = buildProjectContext({
+      task: "stripe idempotency webhook",
+      dir: join(root, "src", "payment"),
+      budget: 10000,
+      db,
+      now: NOW,
+    });
+
+    const wholePaths = wholeProject.candidates.map((item) => item.path);
+    const subPaths = subdirectory.candidates.map((item) => item.path);
+
+    assert.ok(
+      wholePaths.some((path) => path.includes("camera")),
+      "the whole-project build should see the camera module",
+    );
+    assert.ok(
+      !subPaths.some((path) => path.includes("camera")),
+      `a build scoped to src/payment must not collect src/camera: ${JSON.stringify(subPaths)}`,
+    );
+    assert.ok(
+      subPaths.some((path) => path.includes("webhook")),
+      "the scoped build should still see the file it was pointed at",
+    );
+
+    db.close();
+  });
+
+  it("still anchors project identity to the repository root", () => {
+    const { db, root, projectId } = fixture("identity");
+    // Identity is anchored to the Git root, so the fixture needs to be one.
+    execFileSync("git", ["init", "--quiet"], { cwd: root });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "ctxd test"], { cwd: root });
+    execFileSync("git", ["add", "."], { cwd: root });
+    execFileSync("git", ["commit", "--quiet", "-m", "fixture"], { cwd: root });
+
+    // Re-register now that the directory has a Git identity.
+    const registered = upsertProject(db, detectProject(root));
+
+    const fromSubdirectory = buildProjectContext({
+      task: "stripe idempotency webhook",
+      dir: join(root, "src", "payment"),
+      budget: 10000,
+      db,
+      now: NOW,
+    });
+
+    // Narrowing the file scope must not detach the build from its project:
+    // memory and Git state still belong to the repository.
+    assert.equal(fromSubdirectory.project?.id, registered.id);
+    assert.notEqual(projectId, undefined);
+
     db.close();
   });
 });
