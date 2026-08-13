@@ -111,9 +111,31 @@ jobs:
           fi
           echo "No network primitives in the local-first packages."
 
+  no-mcp-execution:
+    name: No shell execution through MCP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert workers cannot run commands
+        run: |
+          set -euo pipefail
+          # §63: ctxd never exposes arbitrary shell execution to a worker.
+          # Controlled execution exists, but it lives in @ctxd/verify behind the
+          # CLI and is deliberately unreachable from the MCP surface.
+          if grep -rnE 'from "node:child_process"|\b(execSync|execFileSync|spawnSync|spawn|fork)\s*\(|\bnew Function\s*\(|\beval\s*\(' \
+              packages/mcp/src; then
+            echo "::error::MCP must not be able to spawn a process."
+            exit 1
+          fi
+          if grep -qE '"@ctxd/verify"' packages/mcp/package.json; then
+            echo "::error::MCP must not depend on @ctxd/verify."
+            exit 1
+          fi
+          echo "MCP exposes no execution capability."
+
   ci:
     name: CI passed
     runs-on: ubuntu-latest
-    needs: [build, typecheck, test, benchmark, doctor, no-network]
+    needs: [build, typecheck, test, benchmark, doctor, no-network, no-mcp-execution]
     steps:
       - run: echo "All checks passed."
