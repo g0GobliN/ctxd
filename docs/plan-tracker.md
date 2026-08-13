@@ -6,7 +6,7 @@ sections 0–91). Section refs like `§22` point back at the spec.
 **Spec read: complete (all 92 sections).**
 
 **Current state:** Phases 1 through 10 complete and verified (Tauri excepted —
-it is explicitly "eventually" in §67). 379 tests passing,
+it is explicitly "eventually" in §67). 384 tests passing,
 three golden benchmarks green. All 15 MCP tools are live, and MCP has no
 execution primitive at all — asserted by a test and a CI gate. ctxd ships no
 model and calls no network; the AI interfaces exist so one could be added.
@@ -418,16 +418,16 @@ Engine also exposed as a **pure function** for tests.
 - [x] Performance targets (§72): CLI start ~180ms, search ~1ms, memory lookup
       ~1ms — asserted in tests/integration/performance.test.ts. Lazy command
       dispatch cut startup from ~840ms.
-- [ ] Docs (§76): README + `docs/{architecture,storage,context-engine,memory,
-      diff-firewall,worker-output,mcp,cli,ui,security,development,roadmap}.md`.
-      Documentation must reflect real implementation — never document fake
-      features.
-- [ ] Testing (§77): unit (config, paths, token estimation, ranking, dedup,
-      compression, budget, receipts, change surface, formatting/comment/
-      over-edit detection); integration (SQLite, migrations, FTS5, context
-      engine, indexing, Git, diff firewall); e2e (`doctor`, `status`, `init`,
-      `context`). Temp dirs only — **tests never touch `~/.ctxd`** or depend on
-      the developer's machine.
+- [x] Docs (§76): README + architecture, storage, context-engine, memory,
+      diff-firewall, verification (worker output, §58–61), mcp, cli, ui, api,
+      security, development, benchmarks, local-ai, roadmap. Documentation
+      reflects the real implementation, and the gaps are named as gaps.
+- [x] Testing (§77): unit, integration and e2e coverage across config, paths,
+      estimation, ranking, dedup, compression, budget, receipts, change surface,
+      noise detection, SQLite, migrations, FTS5, indexing, Git, the diff
+      firewall, verification, the API and the CLI. Temp dirs only — **tests
+      never touch `~/.ctxd`**, enforced by tests/unit/test-hygiene.test.ts
+      rather than left to convention.
 
 ---
 

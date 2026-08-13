@@ -90,8 +90,9 @@ node packages/cli/dist/index.js doctor
 interface. React and Vite are build-time only — nothing remote is ever fetched
 at runtime.
 
-`doctor` verifies Node, SQLite, FTS5, storage, config, the database, logging and
-Git. Every check actually runs — none reports success without executing.
+`doctor` verifies Node, SQLite, FTS5, storage, config, the database, logging,
+Git and offline capability. Every check actually runs — none reports success
+without executing.
 
 ## Quickstart
 
@@ -274,6 +275,8 @@ APIs may change before 1.0.
 | Document | Contents |
 |----------|----------|
 | [architecture.md](docs/architecture.md) | Packages, dependencies, schema |
+| [storage.md](docs/storage.md) | Where everything lives, and what is never stored |
+| [cli.md](docs/cli.md) | Every command, with exit codes |
 | [context-engine.md](docs/context-engine.md) | Ranking, selection, compression, receipts |
 | [diff-firewall.md](docs/diff-firewall.md) | Change surface, over-edit detection, Change Receipts |
 | [verification.md](docs/verification.md) | Verification, architecture drift, correction context |
@@ -285,6 +288,8 @@ APIs may change before 1.0.
 | [benchmarks.md](docs/benchmarks.md) | Benchmark scenarios, results, performance targets |
 | [local-ai.md](docs/local-ai.md) | The optional-AI interfaces and the offline guarantee |
 | [development.md](docs/development.md) | Building, testing, conventions |
+| [security.md](docs/security.md) | Threat model, secrets, execution, the local API |
+| [roadmap.md](docs/roadmap.md) | Built, not built, and never |
 | [plan.md](docs/plan.md) | The full specification |
 
 ## Contributing
