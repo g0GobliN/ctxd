@@ -99,6 +99,28 @@ function requireProject(
   return resolved;
 }
 
+/**
+ * The only provenance a worker may claim for its own output.
+ *
+ * Every other source asserts something the worker is not in a position to
+ * assert. `explicit_user` and `project_rule` are the developer's authority;
+ * `accepted_decision` means a team accepted it; `verified_code` and
+ * `verified_git` mean *ctxd* checked. A worker writing any of those is claiming
+ * an authority it did not earn — and because authority decides which record
+ * survives a conflict, it would let a worker supersede a verified fact by
+ * simply saying so.
+ */
+const WORKER_SOURCES: readonly string[] = ["worker_statement", "inferred"];
+
+function refuseSource(source: string): ToolResult {
+  return fail(
+    `A worker may not record memory as ${source}. Use worker_statement for your ` +
+      "own conclusions, or inferred for something you deduced. If the developer " +
+      "wants this recorded with more authority, they can run: ctxd memory add, " +
+      "ctxd decision add, or ctxd explain add.",
+  );
+}
+
 const DIR_PROPERTY = {
   dir: {
     type: "string",
@@ -455,13 +477,7 @@ export function createTools(ctx: ToolContext): ToolDefinition[] {
         const sourceInput = str(args, "source") ?? "worker_statement";
         if (!isMemorySource(sourceInput)) return fail(`Unknown source ${sourceInput}.`);
 
-        // A worker may not claim the developer's authority for its own output.
-        if (sourceInput === "explicit_user" || sourceInput === "project_rule") {
-          return fail(
-            `A worker may not record memory as ${sourceInput}. ` +
-              `Use worker_statement, or ask the developer to record it themselves.`,
-          );
-        }
+        if (!WORKER_SOURCES.includes(sourceInput)) return refuseSource(sourceInput);
 
         const tags = Array.isArray(args["tags"])
           ? (args["tags"] as unknown[]).filter((tag): tag is string => typeof tag === "string")
@@ -520,9 +536,7 @@ export function createTools(ctx: ToolContext): ToolDefinition[] {
 
         const sourceInput = str(args, "source") ?? "worker_statement";
         if (!isMemorySource(sourceInput)) return fail(`Unknown source ${sourceInput}.`);
-        if (sourceInput === "explicit_user" || sourceInput === "project_rule") {
-          return fail(`A worker may not record memory as ${sourceInput}.`);
-        }
+        if (!WORKER_SOURCES.includes(sourceInput)) return refuseSource(sourceInput);
 
         const outcome = saveMemory(ctx.db, {
           projectId: existing.projectId,

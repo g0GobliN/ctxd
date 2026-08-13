@@ -161,3 +161,19 @@ nothing and are never used as aliases.
 
 Attaching a path with `--file` records it as a tag, which is the explicit way to
 bind a record to code that does not mention it by name.
+
+## What a worker may claim
+
+Through MCP a worker may record memory only as `worker_statement` or
+`inferred`. Both describe the worker's own position: something it concluded, or
+something it deduced.
+
+Every other source is refused, because each asserts something a worker is not in
+a position to assert — `explicit_user` and `project_rule` are yours,
+`accepted_decision` means a team accepted it, and `verified_code` and
+`verified_git` mean ctxd checked. Since authority decides which record survives
+a conflict, allowing a worker to pick its own source would let it supersede a
+verified fact by simply claiming a higher one.
+
+If something a worker found deserves more authority, you record it: `ctxd memory
+add`, `ctxd decision add` or `ctxd explain add`.

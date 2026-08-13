@@ -1,11 +1,12 @@
 import { strict as assert } from "node:assert";
-import { readFileSync, readdirSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { createTools, type ToolDefinition } from "@ctxd/mcp";
 import { migrate, openDatabase, type Db } from "@ctxd/db";
 import { DEFAULT_CONFIG, resolvePaths } from "@ctxd/core";
+import { detectProject, upsertProject } from "@ctxd/project";
 import { createTempHome } from "../helpers/temp-home.ts";
 
 /**
@@ -99,5 +100,88 @@ describe("the MCP package has no way to run a command (§63)", () => {
       !dependencies.includes("@ctxd/verify"),
       "MCP must not depend on @ctxd/verify: controlled execution is not a worker capability",
     );
+  });
+});
+
+describe("a worker cannot claim authority it did not earn (§31)", () => {
+  /**
+   * Regression: `ctx_memory_save` refused only `explicit_user` and
+   * `project_rule`, so a worker could write `accepted_decision` — which
+   * outranks `verified_code` — and supersede a fact ctxd had verified, purely
+   * by saying so. `verified_code` and `verified_git` were accepted too, and
+   * both assert a verification ctxd performs, not one a worker can perform.
+   *
+   * The README promises a worker cannot overwrite what you told it. Authority
+   * decides which record survives a conflict, so who may claim what is the
+   * whole mechanism.
+   */
+  function tools() {
+    const home = createTempHome();
+    const root = join(home.dir, "project");
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "project" }));
+
+    const db = openDatabase(join(home.dir, "mcp-auth.db"));
+    migrate(db);
+    upsertProject(db, detectProject(root));
+
+    return {
+      db,
+      home,
+      root,
+      list: createTools({
+        db,
+        paths: resolvePaths({ env: { CTXD_HOME: home.dir } }),
+        config: DEFAULT_CONFIG,
+        cwd: root,
+      }),
+    };
+  }
+
+  it("accepts only the provenance a worker can honestly claim", () => {
+    const { db, home, root, list } = tools();
+    try {
+      const save = list.find((tool) => tool.name === "ctx_memory_save");
+      assert.ok(save);
+
+      for (const source of ["worker_statement", "inferred"]) {
+        const result = save.handler({ title: `t-${source}`, content: "c", source, dir: root });
+        assert.notEqual(result.isError, true, `${source} should be accepted`);
+      }
+
+      for (const source of [
+        "accepted_decision",
+        "verified_code",
+        "verified_git",
+        "explicit_user",
+        "project_rule",
+      ]) {
+        const result = save.handler({ title: `t-${source}`, content: "c", source, dir: root });
+        assert.equal(result.isError, true, `${source} must be refused`);
+        assert.match(result.text, /may not record memory as/);
+      }
+    } finally {
+      db.close();
+      home.cleanup();
+    }
+  });
+
+  it("applies the same rule when updating memory", () => {
+    const { db, home, root, list } = tools();
+    try {
+      const update = list.find((tool) => tool.name === "ctx_memory_update");
+      assert.ok(update);
+
+      const result = update.handler({
+        title: "escalation",
+        content: "c",
+        source: "accepted_decision",
+        dir: root,
+      });
+      assert.equal(result.isError, true);
+    } finally {
+      db.close();
+      home.cleanup();
+    }
   });
 });

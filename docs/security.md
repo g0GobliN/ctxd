@@ -125,6 +125,17 @@ An agent's conclusion is stored as `worker_statement` with visible confidence.
 If it contradicts a rule you stated, **the write is refused and the conflict
 reported**. Inferred memory can never silently override an explicit rule.
 
+Because authority decides which record survives a conflict, *who may claim what*
+is the whole mechanism. Through MCP a worker may write only `worker_statement`
+or `inferred` — the two sources describing its own epistemic position. Every
+other source is refused: `explicit_user` and `project_rule` are the developer's
+authority, `accepted_decision` means a team accepted it, and `verified_code` and
+`verified_git` mean *ctxd* checked.
+
+That gate was once narrower, refusing only the two developer sources. A worker
+could write `accepted_decision` — which outranks `verified_code` — and supersede
+a fact ctxd had verified, purely by saying so.
+
 ## The Diff Firewall never destroys work
 
 It reports and classifies. It does not revert formatting, delete comments,
