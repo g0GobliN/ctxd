@@ -51,9 +51,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # The fixture's .env is gitignored on purpose; regenerate it so the
+      # Fixture .env files are gitignored on purpose; regenerate them so the
       # "never collects secrets" assertion has a secret to find.
       - run: node --experimental-strip-types scripts/generate-fixture.ts
+      - run: node --experimental-strip-types scripts/generate-benchmarks.ts
       - run: pnpm test
 
   benchmark:
@@ -69,6 +70,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: node --experimental-strip-types scripts/generate-fixture.ts
+      - run: node --experimental-strip-types scripts/generate-benchmarks.ts
       # Retrieval quality is a product requirement, not a nice-to-have:
       # a regression here fails the build.
       - name: Run the golden benchmark
@@ -101,7 +103,9 @@ jobs:
           # design. The MCP package is exempt: it speaks a protocol on stdio.
           if grep -rnE '\b(fetch|XMLHttpRequest|WebSocket)\s*\(|from "node:(http|https|net|dgram|tls)"' \
               packages/context/src packages/core/src packages/db/src \
-              packages/memory/src packages/project/src packages/work/src; then
+              packages/memory/src packages/project/src packages/work/src \
+              packages/firewall/src packages/diff/src packages/verify/src \
+              packages/stats/src; then
             echo "::error::Found a network primitive in a local-first package."
             exit 1
           fi
