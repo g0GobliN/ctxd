@@ -47,3 +47,12 @@ export {
   writeMemoryDigests,
   type ExternalizedContent,
 } from "./storage.js";
+
+export {
+  CODE_MEMORY_TYPES,
+  formatMemoryMatches,
+  memoriesForPaths,
+  pathAliases,
+  type MemoryMatch,
+  type RelevanceOptions,
+} from "./relevance.js";

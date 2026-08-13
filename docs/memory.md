@@ -86,3 +86,78 @@ ctxd memory search <query>
 The project must be registered with `ctxd init` first — memory is always
 attached to a project, and a project's identity is anchored to its Git root
 commit where one exists.
+
+## Decisions, bugs and file notes (§45, §46, §47)
+
+Three commands record the kinds of knowledge a future session cannot recover
+from the code, in the shapes the specification defines:
+
+```bash
+ctxd decision add --title "Idempotency keys are permanent" \
+  --question "May a key be reused after expiry?" \
+  --decision "No." \
+  --reason "Stripe may retry an event long after the key would have expired." \
+  --status ACTIVE --file src/payment/idempotency.ts
+
+ctxd bug add --title "Duplicate payments under retry" \
+  --problem "A retried webhook created a second Payment." \
+  --cause "The idempotency check ran after the insert." \
+  --fix "Check before writing." --status RESOLVED \
+  --file src/payment/idempotency.ts
+
+ctxd explain add --title "Ordering here is deliberate" \
+  --why "Stripe may retry the same event concurrently." \
+  --important "Do not reorder without reviewing Decision #42." \
+  --file src/payment/idempotency.ts
+```
+
+Each stores project memory of type `DECISION`, `BUG` or `FILE`. Authority
+follows what the record is (see the authority order above): a decision is an
+`accepted_decision`, a bug report and a file note are `explicit_user`. All three
+outrank anything a worker later concludes.
+
+`ctxd decisions` lists them; `ctxd decision <id>` shows one; `ctxd decision for
+<path>` asks what applies to a file.
+
+### Surfacing
+
+Writing knowledge down is worthless if it never comes back. **`ctxd diff`
+surfaces the decisions, bugs and file notes attached to every file a change
+touches** — the moment they matter, and the moment a worker is most likely to
+"clean up" something deliberate.
+
+```
+RELEVANT PROJECT MEMORY
+
+Decision: Idempotency keys are permanent
+  applies to: src/payment/idempotency.ts (matched "src/payment/idempotency.ts")
+  source: accepted_decision · importance P1
+  ...
+
+These are recorded decisions, not obstacles — but do not remove the
+code they describe without reading them first.
+```
+
+Pass `--no-memory` to suppress it.
+
+### How matching works
+
+Deterministic and textual — no model, no embeddings. Each changed path yields
+aliases from most to least specific: the full path, its suffixes, the file name,
+the stem, then the module directory. A memory matches when it names one of them,
+and the most specific match wins, so a decision about *this file* is reported
+before a constraint about the whole module.
+
+Two rules keep it honest:
+
+- **Tokens shorter than four characters never match.** A memory mentioning "id"
+  or "db" would attach itself to half the repository, and the feature would
+  train people to ignore it.
+- **Matches must fall on a token boundary.** "payment" does not match inside
+  "prepayments".
+
+Generic directory names — `src`, `lib`, `utils`, `index`, `config` — identify
+nothing and are never used as aliases.
+
+Attaching a path with `--file` records it as a tag, which is the explicit way to
+bind a record to code that does not mention it by name.
