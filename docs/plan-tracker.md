@@ -5,10 +5,11 @@ sections 0–91). Section refs like `§22` point back at the spec.
 
 **Spec read: complete (all 92 sections).**
 
-**Current state:** Phases 1 through 9 complete and verified. 335 tests passing,
-three golden benchmarks green. All 15 MCP tools are live. Next action: Phase 10
-— optional local AI, embeddings and Tauri (§64–66), all of which must stay
-optional: everything works offline without them.
+**Current state:** Phases 1 through 9 complete and verified. 365 tests passing,
+three golden benchmarks green. All 15 MCP tools are live, and MCP has no
+execution primitive at all — asserted by a test and a CI gate. Next action:
+Phase 10 — optional local AI, embeddings and Tauri (§64–66), all of which must
+stay optional: everything works offline without them.
 
 > Environment note: this machine now runs Node 24.14.0 and every `ctxd doctor`
 > check passes. `better-sqlite3` was moved to `^12.2.0`, which is the first line
@@ -365,14 +366,14 @@ Engine also exposed as a **pure function** for tests.
 - [x] Local HTTP API + `ctxd ui` at `http://127.0.0.1:4317`, loopback-only,
       token-gated writes. React front end still to come; Tauri eventually;
       **never Electron.**
-- [x] Dashboard, memory viewer, task manager (kanban), context debugger, token
-      stats, Git overview, change/diff inspector. Not an IDE — the brain stays
-      in core. Worker monitor and settings editor still to come.
+- [x] Dashboard, memory viewer, task manager (kanban), worker monitor, context
+      debugger, token stats, Git overview, change/diff inspector, settings
+      (read-only). Not an IDE — the brain stays in core.
 - [x] Context inspector (§68): per request show task, budget, included vs
       excluded, candidate vs final tokens, estimated reduction, and **why**
       each item was included or excluded
-- [ ] Worker monitor (§69): status, current/last task, last activity, context
-      usage, last error — core support exists in `@ctxd/verify`; no panel yet
+- [x] Worker monitor (§69): status, current/last task, last activity. Derived
+      from recorded sessions; an unseen worker reads as unknown, never idle
 - [x] Git UI (§71): branch, status, changed files, diff summary, change
       efficiency, over-edit warnings
 
@@ -383,13 +384,13 @@ Engine also exposed as a **pure function** for tests.
 ### Security (§62, §63)
 - [x] HTTP binds `127.0.0.1` only, never `0.0.0.0` by default; local auth/token
       for the UI; protect mutating APIs; Host and Origin pinned to loopback
-- [ ] No telemetry, no cloud DB; never log secrets; redact env vars; don't
+- [x] No telemetry, no cloud DB; never log secrets; redact env vars; don't
       index `.env`; don't send secrets to workers; honor `.gitignore` /
       `.ctxdignore`
-- [ ] **Never expose arbitrary shell execution through MCP.** Controlled
-      execution in three categories: READ_ONLY (git status/diff, rg, find, ls),
-      SAFE_MUTATING (tests, typecheck, lint, build), DANGEROUS (rm, git reset,
-      git clean, deploys, credential ops → explicit confirmation)
+- [x] **Never expose arbitrary shell execution through MCP.** Controlled
+      execution lives in `@ctxd/verify` behind the CLI in three categories:
+      READ_ONLY, SAFE_MUTATING, DANGEROUS (explicit confirmation). MCP has no
+      execution primitive at all — asserted by a test and a CI gate
 
 ### Statistics (§48, §49)
 - [x] Track per request via receipts; every value tagged exact / estimated /
@@ -412,8 +413,8 @@ Engine also exposed as a **pure function** for tests.
 - [x] Bug memory (§46): `ctxd bug`; surfaced when relevant areas are touched
 - [x] File/module explanations (§47): `ctxd explain` attaches WHY/IMPORTANT
       notes, surfaced on change so workers don't "clean up" intentional code
-- [ ] Export/import (§74): human-readable, portable, no lock-in
-- [ ] `ctxd logs` (§75)
+- [x] Export/import (§74): human-readable JSON, portable, no lock-in
+- [x] `ctxd logs` (§75)
 - [x] Performance targets (§72): CLI start ~180ms, search ~1ms, memory lookup
       ~1ms — asserted in tests/integration/performance.test.ts. Lazy command
       dispatch cut startup from ~840ms.
