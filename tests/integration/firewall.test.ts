@@ -421,15 +421,26 @@ describe("collection scope", () => {
   });
 
   it("still anchors project identity to the repository root", () => {
-    const { db, root, projectId } = fixture("identity");
-    // Identity is anchored to the Git root, so the fixture needs to be one.
+    // The Git repository has to exist before the project is registered.
+    // Registering first and initialising after would change the project's
+    // identity — it anchors to the root commit — while the row's `root` column
+    // stayed the same, and that column is UNIQUE.
+    const root = join(home.dir, "fw-identity-git");
+    mkdirSync(join(root, "src", "payment"), { recursive: true });
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "fw-identity-git" }));
+    writeFileSync(
+      join(root, "src/payment/webhook.ts"),
+      "export function handleWebhook() { return 'stripe idempotency'; }",
+    );
+
     execFileSync("git", ["init", "--quiet"], { cwd: root });
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
     execFileSync("git", ["config", "user.name", "ctxd test"], { cwd: root });
     execFileSync("git", ["add", "."], { cwd: root });
     execFileSync("git", ["commit", "--quiet", "-m", "fixture"], { cwd: root });
 
-    // Re-register now that the directory has a Git identity.
+    const db = openDatabase(join(home.dir, `fw-identity-git-${(counter += 1)}.db`));
+    migrate(db);
     const registered = upsertProject(db, detectProject(root));
 
     const fromSubdirectory = buildProjectContext({
@@ -443,7 +454,6 @@ describe("collection scope", () => {
     // Narrowing the file scope must not detach the build from its project:
     // memory and Git state still belong to the repository.
     assert.equal(fromSubdirectory.project?.id, registered.id);
-    assert.notEqual(projectId, undefined);
 
     db.close();
   });
