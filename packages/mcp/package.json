@@ -1,0 +1,22 @@
+{
+  "name": "@ctxd/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@ctxd/context": "workspace:*",
+    "@ctxd/core": "workspace:*",
+    "@ctxd/db": "workspace:*",
+    "@ctxd/firewall": "workspace:*",
+    "@ctxd/memory": "workspace:*",
+    "@ctxd/project": "workspace:*",
+    "@ctxd/work": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  }
+}

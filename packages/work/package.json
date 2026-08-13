@@ -1,0 +1,18 @@
+{
+  "name": "@ctxd/work",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@ctxd/context": "workspace:*",
+    "@ctxd/db": "workspace:*",
+    "@ctxd/memory": "workspace:*",
+    "@ctxd/project": "workspace:*"
+  }
+}

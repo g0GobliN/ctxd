@@ -1,0 +1,15 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/utils" },
+    { "path": "./packages/core" },
+    { "path": "./packages/db" },
+    { "path": "./packages/context" },
+    { "path": "./packages/project" },
+    { "path": "./packages/memory" },
+    { "path": "./packages/firewall" },
+    { "path": "./packages/work" },
+    { "path": "./packages/mcp" },
+    { "path": "./packages/cli" }
+  ]
+}

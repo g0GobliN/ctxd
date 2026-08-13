@@ -1,0 +1,41 @@
+name: Benchmark scenario
+description: Propose a new retrieval benchmark
+labels: [benchmark, good first issue]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Benchmark scenarios are the highest-leverage contribution to ctxd:
+        retrieval quality gets measured rather than argued about.
+
+  - type: input
+    id: task
+    attributes:
+      label: The task
+      placeholder: "Fix Stripe webhook idempotency"
+    validations:
+      required: true
+
+  - type: textarea
+    id: must
+    attributes:
+      label: What context must be included
+      description: Files a correct answer cannot be produced without.
+    validations:
+      required: true
+
+  - type: textarea
+    id: must-not
+    attributes:
+      label: What must be excluded
+      description: Plausible-looking files that are actually irrelevant.
+    validations:
+      required: true
+
+  - type: textarea
+    id: trap
+    attributes:
+      label: What makes this scenario hard
+      description: >
+        Duplicated docs? A rule phrased differently from the task? A large file
+        that must be compressed rather than dropped?

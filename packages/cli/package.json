@@ -1,0 +1,26 @@
+{
+  "name": "@ctxd/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ctxd": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@ctxd/context": "workspace:*",
+    "@ctxd/core": "workspace:*",
+    "@ctxd/db": "workspace:*",
+    "@ctxd/firewall": "workspace:*",
+    "@ctxd/mcp": "workspace:*",
+    "@ctxd/memory": "workspace:*",
+    "@ctxd/project": "workspace:*",
+    "@ctxd/utils": "workspace:*",
+    "@ctxd/work": "workspace:*"
+  }
+}

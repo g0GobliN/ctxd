@@ -1,0 +1,33 @@
+{
+  "name": "stripe-webhook",
+  "task": "Fix Stripe webhook idempotency",
+  "budget": 10000,
+  "minCandidateTokens": 50000,
+  "mustInclude": [
+    "src/payment/webhook.ts",
+    "src/payment/idempotency.ts",
+    "docs/rules.md"
+  ],
+  "shouldInclude": [
+    "src/stripe/adapter.ts",
+    "src/payment/payment-repository.ts",
+    "docs/architecture.md",
+    "tests/payment/webhook.test.ts",
+    ".ctxd/memory/duplicate-payments-incident.md"
+  ],
+  "mustExclude": [
+    "src/camera/stream.ts",
+    "src/camera/recorder.ts",
+    "src/signage/device.ts",
+    "src/signage/playlist.ts",
+    "src/kiosk/printer.ts",
+    "src/facilities/hvac.ts",
+    ".env"
+  ],
+  "mustDeduplicate": [
+    {
+      "keep": "docs/architecture.md",
+      "drop": "docs/architecture-overview.md"
+    }
+  ]
+}

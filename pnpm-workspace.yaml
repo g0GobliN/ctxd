@@ -1,0 +1,7 @@
+packages:
+  - "packages/*"
+
+# better-sqlite3 is a native module; its install script fetches or builds the
+# binding. It is the only package allowed to run install scripts.
+allowBuilds:
+  better-sqlite3: true

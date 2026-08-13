@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "24"
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The fixture's .env is gitignored on purpose; regenerate it so the
+      # "never collects secrets" assertion has a secret to find.
+      - run: node --experimental-strip-types scripts/generate-fixture.ts
+      - run: pnpm test
+
+  benchmark:
+    name: Golden benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: node --experimental-strip-types scripts/generate-fixture.ts
+      # Retrieval quality is a product requirement, not a nice-to-have:
+      # a regression here fails the build.
+      - name: Run the golden benchmark
+        run: node --test --experimental-strip-types tests/integration/golden-benchmark.test.ts
+
+  doctor:
+    name: Doctor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # Every check must actually pass on a clean machine.
+      - run: node packages/cli/dist/index.js doctor
+
+  no-network:
+    name: No network calls in core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert the core makes no outbound calls
+        run: |
+          set -euo pipefail
+          # The context engine, memory and storage layers are local-first by
+          # design. The MCP package is exempt: it speaks a protocol on stdio.
+          if grep -rnE '\b(fetch|XMLHttpRequest|WebSocket)\s*\(|from "node:(http|https|net|dgram|tls)"' \
+              packages/context/src packages/core/src packages/db/src \
+              packages/memory/src packages/project/src packages/work/src; then
+            echo "::error::Found a network primitive in a local-first package."
+            exit 1
+          fi
+          echo "No network primitives in the local-first packages."
+
+  ci:
+    name: CI passed
+    runs-on: ubuntu-latest
+    needs: [build, typecheck, test, benchmark, doctor, no-network]
+    steps:
+      - run: echo "All checks passed."

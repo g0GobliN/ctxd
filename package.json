@@ -1,0 +1,32 @@
+{
+  "name": "ctxd",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first AI engineering manager, context firewall and persistent engineering memory",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "clean": "tsc -b --clean",
+    "test": "pnpm build && node --test --experimental-strip-types tests/unit/*.test.ts tests/integration/*.test.ts tests/e2e/*.test.ts",
+    "ctxd": "node packages/cli/dist/index.js"
+  },
+  "devDependencies": {
+    "@ctxd/cli": "workspace:*",
+    "@ctxd/context": "workspace:*",
+    "@ctxd/core": "workspace:*",
+    "@ctxd/db": "workspace:*",
+    "@ctxd/firewall": "workspace:*",
+    "@ctxd/mcp": "workspace:*",
+    "@ctxd/memory": "workspace:*",
+    "@ctxd/project": "workspace:*",
+    "@ctxd/utils": "workspace:*",
+    "@ctxd/work": "workspace:*",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

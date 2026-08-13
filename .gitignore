@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# ctxd never indexes secrets; never commit them either.
+.env
+.env.*
+
+.DS_Store
+.claude

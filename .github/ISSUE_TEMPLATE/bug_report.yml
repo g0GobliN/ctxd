@@ -1,0 +1,44 @@
+name: Bug report
+description: Something does not behave the way it is documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. If this is a **security** issue — anything that
+        leaks a secret, escapes the project root, or lets an AI worker
+        overwrite a higher-authority memory — please use
+        [private reporting](https://github.com/g0GobliN/ctxd/security/advisories/new)
+        instead.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you expect, and what did you get?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact commands, ideally on a small repository.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `ctxd doctor`
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: ctxd version or commit
+    validations:
+      required: true

@@ -1,0 +1,10 @@
+{
+  "name": "payments-service",
+  "version": "2.4.1",
+  "type": "module",
+  "dependencies": {
+    "express": "^4.19.2",
+    "stripe": "^16.2.0",
+    "pg": "^8.12.0"
+  }
+}
