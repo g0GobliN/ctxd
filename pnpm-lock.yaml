@@ -86,6 +86,9 @@ importers:
       '@ctxd/utils':
         specifier: workspace:*
         version: link:../utils
+      '@ctxd/verify':
+        specifier: workspace:*
+        version: link:../verify
       '@ctxd/work':
         specifier: workspace:*
         version: link:../work
