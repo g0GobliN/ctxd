@@ -247,7 +247,7 @@ Every command supports `--help`.
 ## Project status
 
 **Early but real.** Phases 1–9 of the [specification](docs/plan.md) are built,
-tested and documented — 346 tests, including three golden benchmarks that turn
+tested and documented — 431 tests, including seven golden benchmarks that turn
 77k–151k token fixture repositories into 2k–6k while keeping everything each
 task needs.
 

@@ -320,3 +320,67 @@ describe("receipt", () => {
     assert.equal(receipt.algorithm_version, "1.0.0");
   });
 });
+
+describe("task relevance gate", () => {
+  const task = extractTaskSignals("Trace the checkout payment flow from cart total to recorded order");
+
+  function select(items: ContextItem[]) {
+    return selectWithinBudget(rankItems(items, task, { now: NOW }), task, { budget: 10000 });
+  }
+
+  /**
+   * Leftover budget is not a reason to send a file.
+   *
+   * Regression: an unrelated service whose SQL said `ORDER BY` scored a single
+   * incidental keyword hit against a task mentioning "order", passed a gate
+   * that accepted anything above zero, and was included as "supporting
+   * context" while supporting nothing.
+   */
+  it("excludes a file whose only tie to the task is one incidental word", () => {
+    const relevant = item(
+      "src/checkout/order.ts",
+      "export class Checkout { async place(cart, payment) { return this.orders.create(cart.total); } }",
+    );
+    const coincidental = item(
+      "src/hr/employee-service.ts",
+      "export class EmployeeService { async list(siteId) { " +
+        "return this.db.query('SELECT id FROM hr_employee WHERE site_id = $1 ORDER BY label'); } }",
+    );
+
+    const result = select([relevant, coincidental]);
+    const includedPaths = result.included.map((entry) => entry.item.path);
+
+    assert.ok(includedPaths.includes("src/checkout/order.ts"));
+    assert.ok(
+      !includedPaths.includes("src/hr/employee-service.ts"),
+      "a lone incidental term is coincidence, not relevance",
+    );
+
+    const excluded = result.excluded.find((entry) => entry.path === "src/hr/employee-service.ts");
+    assert.equal(excluded?.reason, "no task relevance");
+  });
+
+  it("keeps a file whose path matches, even with weak content overlap", () => {
+    // A path hit is deliberate in a way one word in a comment is not.
+    const byPath = item("src/checkout/cart.ts", "export const helper = () => 1;");
+    const result = select([byPath]);
+
+    assert.deepEqual(
+      result.included.map((entry) => entry.item.path),
+      ["src/checkout/cart.ts"],
+    );
+  });
+
+  it("keeps a single genuine match when the task is short", () => {
+    const short = extractTaskSignals("fix idempotency");
+    const relevant = item(
+      "src/payment/idempotency.ts",
+      "export class IdempotencyStore { has(id) { return this.seen.has(id); } }",
+    );
+
+    const result = selectWithinBudget(rankItems([relevant], short, { now: NOW }), short, {
+      budget: 10000,
+    });
+    assert.equal(result.included.length, 1);
+  });
+});

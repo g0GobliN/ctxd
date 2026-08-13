@@ -6,8 +6,8 @@ sections 0–91). Section refs like `§22` point back at the spec.
 **Spec read: complete (all 92 sections).**
 
 **Current state:** Phases 1 through 10 complete and verified (Tauri excepted —
-it is explicitly "eventually" in §67). 384 tests passing,
-three golden benchmarks green. All 15 MCP tools are live, and MCP has no
+it is explicitly "eventually" in §67). 431 tests passing,
+seven golden benchmarks green. All 15 MCP tools are live, and MCP has no
 execution primitive at all — asserted by a test and a CI gate. ctxd ships no
 model and calls no network; the AI interfaces exist so one could be added.
 

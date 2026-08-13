@@ -57,6 +57,22 @@ function isMandatory(priority: Priority): boolean {
  * relevant file, say) will be justified by the dependency and memory signals
  * added in later phases, not by filling space now.
  */
+/**
+ * The weakest keyword signal that still counts as a connection.
+ *
+ * `keywordScore` is roughly 0.8 × the fraction of task terms present, so this
+ * threshold excludes a file whose only tie to the task is a single incidental
+ * term out of many — an unrelated service whose SQL happens to say `ORDER BY`
+ * against a task mentioning "order", say. It scales with the task rather than
+ * cutting at a fixed count: on an eight-term task one stray match is 0.10 and
+ * is dropped, while on a three-term task a single genuine match is 0.27 and is
+ * kept.
+ *
+ * A path match is exempt. Directory and file names are chosen deliberately, so
+ * a path hit is evidence in a way that one word in a comment is not.
+ */
+const MINIMUM_KEYWORD_RELEVANCE = 0.12;
+
 function hasTaskRelevance(item: ContextItem): boolean {
   if (isMandatory(item.priority) || item.priority === "P1") return true;
   // An item that arrived with a reason was returned by a retrieval provider
@@ -64,7 +80,7 @@ function hasTaskRelevance(item: ContextItem): boolean {
   if (item.reason !== undefined) return true;
   const signals = item.relevance;
   if (signals === undefined) return true;
-  return signals.keyword > 0 || signals.path > 0;
+  return signals.keyword >= MINIMUM_KEYWORD_RELEVANCE || signals.path > 0;
 }
 
 /**
