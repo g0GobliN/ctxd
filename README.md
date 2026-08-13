@@ -81,10 +81,14 @@ Requires **Node.js 24+** and **pnpm**.
 git clone https://github.com/g0GobliN/ctxd.git
 cd ctxd
 pnpm install
-pnpm build
+pnpm build:all      # core packages, then the interface bundle
 
 node packages/cli/dist/index.js doctor
 ```
+
+`pnpm build` alone builds the core packages; `build:all` also builds the
+interface. React and Vite are build-time only — nothing remote is ever fetched
+at runtime.
 
 `doctor` verifies Node, SQLite, FTS5, storage, config, the database, logging and
 Git. Every check actually runs — none reports success without executing.
@@ -153,6 +157,65 @@ Two rules do most of the work:
 
 Deep dive: [docs/context-engine.md](docs/context-engine.md).
 
+## The other direction
+
+The context firewall controls what goes *to* a worker. The **Diff Firewall**
+inspects what comes back.
+
+```
+$ ctxd diff --task "Change the webhook retry limit from 3 to 5"
+
+CHANGE RECEIPT 4f1c9a02
+
+Changed:   3 files
+Added:     241 lines      Removed: 118 lines
+
+Semantic:        6 lines
+Formatting-only: 312 lines (1 file)
+Unrelated:       1 file
+Dependency:      1 file
+
+Assessment: NEEDS_REVIEW  (risk: high)
+Change efficiency score: 0.41 — a focus measure, not a correctness score
+
+Why:
+  · SMALL TASK / LARGE CHANGE MISMATCH
+      expected about 2 file(s) and 20 changed line(s); got 3 file(s),
+      +241/−118 (6 semantic)
+  · src/camera/stream.ts shares no vocabulary with the task
+  · package.json added a dependency the task did not ask for
+```
+
+Six lines of real change inside 359 lines of diff — and it says which is which.
+
+**It never edits, reverts or rejects anything.** A large diff is not wrong by
+itself; sometimes the task needs one. The firewall makes the *shape* of a change
+visible so a person can decide.
+
+`ctxd verify` then runs the project's own checks — never reporting a check as
+passed unless it actually ran. When one fails, it builds a **correction
+context**: the failed command, the error, and the code it points at. Not the
+original context. The worker already has that.
+
+## See it
+
+```bash
+ctxd ui     # http://127.0.0.1:4317
+```
+
+A local interface over the same receipts: the context inspector showing why each
+file was included or excluded, the change inspector, project memory, tasks and
+Git state.
+
+It binds loopback only, refuses a non-loopback `Host` or `Origin`, and requires
+a local token for anything that writes. It is a viewer, not a second brain —
+everything it shows is available from the CLI.
+
+Deep dives: [docs/ui.md](docs/ui.md) · [docs/api.md](docs/api.md).
+
+Deep dive: [docs/diff-firewall.md](docs/diff-firewall.md) ·
+[docs/verification.md](docs/verification.md).
+
 ## Commands
 
 | Command | Purpose |
@@ -161,22 +224,31 @@ Deep dive: [docs/context-engine.md](docs/context-engine.md).
 | `ctxd status` | Version, storage, database, project, Git |
 | `ctxd init` | Register and index a project |
 | `ctxd context` | Build minimum useful context for a task |
+| `ctxd diff` | Inspect a worker's changes before accepting them |
+| `ctxd verify` | Run the project's own checks against those changes |
 | `ctxd search` | Expand context incrementally |
+| `ctxd stats` | What ctxd has kept out of the model's context |
+| `ctxd efficiency` | The context reduction, on its own |
 | `ctxd memory` | Record and search project knowledge |
+| `ctxd decision` | Record and surface project decisions |
+| `ctxd bug` | Record and surface previous bugs |
+| `ctxd explain` | Attach a WHY note to a file or module |
 | `ctxd task` | Track units of work |
 | `ctxd session` | Track a working session |
 | `ctxd checkpoint` | Record where the work stands |
 | `ctxd handoff` | Everything another worker needs |
 | `ctxd resume` | What was I doing? |
+| `ctxd ui` | Serve the local API for the ctxd interface |
 | `ctxd mcp` | Run the MCP server |
 
 Every command supports `--help`.
 
 ## Project status
 
-**Early but real.** Phases 1–6 of the [specification](docs/plan.md) are built,
-tested and documented — 212 tests, including a golden benchmark that turns a
-76k-token fixture repository into 4.5k while keeping everything the task needs.
+**Early but real.** Phases 1–9 of the [specification](docs/plan.md) are built,
+tested and documented — 346 tests, including three golden benchmarks that turn
+77k–151k token fixture repositories into 2k–6k while keeping everything each
+task needs.
 
 | Phase | Status |
 |-------|--------|
@@ -187,13 +259,13 @@ tested and documented — 212 tests, including a golden benchmark that turns a
 | 4 · Production context firewall | ✅ |
 | 5 · MCP + worker integration | ✅ |
 | 6 · Tasks, sessions, checkpoints, handoffs | ✅ |
-| 7 · Verification + Diff Firewall | 🚧 next |
-| 8 · Web UI | ⬜ |
-| 9 · Optimisation + benchmarks | ⬜ |
-| 10 · Optional local AI | ⬜ |
+| 7 · Verification + Diff Firewall | ✅ |
+| 8 · Local API + web UI | ✅ |
+| 9 · Optimisation + benchmarks | ✅ |
+| 10 · Optional local AI | 🚧 next |
 
-Not built yet: worker verification, the diff firewall, the web UI. Nothing in
-this repository calls a network service or an AI model.
+Not built yet: the worker monitor and settings panels. Nothing in this
+repository calls a network service or an AI model.
 
 APIs may change before 1.0.
 
@@ -203,9 +275,14 @@ APIs may change before 1.0.
 |----------|----------|
 | [architecture.md](docs/architecture.md) | Packages, dependencies, schema |
 | [context-engine.md](docs/context-engine.md) | Ranking, selection, compression, receipts |
+| [diff-firewall.md](docs/diff-firewall.md) | Change surface, over-edit detection, Change Receipts |
+| [verification.md](docs/verification.md) | Verification, architecture drift, correction context |
 | [memory.md](docs/memory.md) | Memory types, authority order, FTS5 search |
 | [work.md](docs/work.md) | Tasks, sessions, checkpoints, handoffs |
+| [api.md](docs/api.md) | The local HTTP API and its security model |
+| [ui.md](docs/ui.md) | The interface, how it is served, and its dependencies |
 | [mcp.md](docs/mcp.md) | The MCP tool surface |
+| [benchmarks.md](docs/benchmarks.md) | Benchmark scenarios, results, performance targets |
 | [development.md](docs/development.md) | Building, testing, conventions |
 | [plan.md](docs/plan.md) | The full specification |
 

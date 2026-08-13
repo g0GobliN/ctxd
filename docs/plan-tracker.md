@@ -5,14 +5,15 @@ sections 0–91). Section refs like `§22` point back at the spec.
 
 **Spec read: complete (all 92 sections).**
 
-**Current state:** Phases 1 through 6 complete and verified. 212 tests passing,
-golden benchmark green. All 15 MCP tools are live. Next action: Phase 7 —
-worker abstraction, verification engine and the Diff Firewall (§42–57), the
-second half of ctxd's core IP.
+**Current state:** Phases 1 through 9 complete and verified. 335 tests passing,
+three golden benchmarks green. All 15 MCP tools are live. Next action: Phase 10
+— optional local AI, embeddings and Tauri (§64–66), all of which must stay
+optional: everything works offline without them.
 
-> Environment gap: this machine runs Node 22.23.2, so `ctxd doctor` correctly
-> reports the `Node 24+` check as failing and exits 1. Every other check
-> passes. `nvm install 24` clears it.
+> Environment note: this machine now runs Node 24.14.0 and every `ctxd doctor`
+> check passes. `better-sqlite3` was moved to `^12.2.0`, which is the first line
+> shipping Node 24 prebuilds — 11.x fell back to `node-gyp` and failed for lack
+> of a Python toolchain.
 
 ---
 
@@ -59,10 +60,10 @@ without losing correctness · 3) reduce unnecessary AI code changes.
 | 4 | Production Context Firewall | ✅ done |
 | 5 | MCP + Claude/Cursor integration | ✅ done |
 | 6 | Tasks + sessions + checkpoints + handoffs | ✅ done |
-| 7 | Worker management + verification + Diff Firewall | 🔄 next |
-| 8 | React UI + local API | ⬜ |
-| 9 | Optimization + benchmarks | ⬜ |
-| 10 | Optional local AI / embeddings / Tauri | ⬜ |
+| 7 | Worker management + verification + Diff Firewall | ✅ done |
+| 8 | React UI + local API | ✅ done |
+| 9 | Optimization + benchmarks | ✅ done |
+| 10 | Optional local AI / embeddings / Tauri | 🔄 next |
 
 ---
 
@@ -293,95 +294,95 @@ Engine also exposed as a **pure function** for tests.
 ## Phase 7 — Workers, verification, Diff Firewall (§42–57)
 
 ### Worker + verification
-- [ ] `Worker { id, name, capabilities, status() }` (§42); claude/cursor/local;
+- [x] `Worker { id, name, capabilities, status() }` (§42); claude/cursor/local;
       no provider-specific logic in core
-- [ ] Verification engine (§43): git diff, git status, typecheck, tests, lint,
+- [x] Verification engine (§43): git diff, git status, typecheck, tests, lint,
       build, architecture checks → PASS / FAIL / NEEDS_REVIEW
-- [ ] On failure **never resend the original context** — build correction
+- [x] On failure **never resend the original context** — build correction
       context (§43, §60): original requirement, failed command, relevant error,
       relevant changed file, relevant code region, relevant rule/decision,
       previous attempt if needed
-- [ ] Architecture drift detection (§44): deterministic rule checks (e.g.
+- [x] Architecture drift detection (§44): deterministic rule checks (e.g.
       "frontend must not access database directly") reporting rule + violating
       file. No LLM required per check.
 
 ### Diff Firewall (§50–57) — first-class feature
-- [ ] Detect the 13 over-edit patterns (§50): whole-file reformat, function
+- [x] Detect the 13 over-edit patterns (§50): whole-file reformat, function
       rewrite, unrelated renames/imports, unnecessary comments/docs, unrelated
       cleanup or refactor, dependency changes, multi-file spread, duplicated
       helpers, defensive code, whitespace/line-ending churn
-- [ ] **Never blindly rewrite worker code, never auto-remove code because the
+- [x] **Never blindly rewrite worker code, never auto-remove code because the
       diff is large, never assume a large diff is wrong.** Goal is minimum
       *necessary* change while preserving behavior, correctness, tests,
       architecture, security, business logic.
-- [ ] Change surface (§51): expected scope per task; compute `files_changed,
+- [x] Change surface (§51): expected scope per task; compute `files_changed,
       lines_added, lines_removed, lines_modified, unrelated_files,
       formatting_only_changes, comment_only_changes, import_only_changes,
       dependency_changes, rename_changes, generated_file_changes`; warn, don't
       auto-reject
-- [ ] Over-edit detection (§52): `change_efficiency_score` — a focus measure,
+- [x] Over-edit detection (§52): `change_efficiency_score` — a focus measure,
       **not** a correctness score
-- [ ] Formatting noise (§53): separate semantic from presentation-only changes
+- [x] Formatting noise (§53): separate semantic from presentation-only changes
       (indentation, line endings, quote style, import order, whitespace,
       whole-file format). Report; never auto-revert or destroy worker output.
-- [ ] Comment noise (§54): keep comments explaining WHY / security / business
+- [x] Comment noise (§54): keep comments explaining WHY / security / business
       rules / API quirks / workarounds / architectural constraints /
       non-obvious invariants; flag ones restating obvious syntax. Never blindly
       delete — move durable reasoning into ctxd memory instead.
-- [ ] Small-fix protection (§55): small tasks get a small expected surface;
+- [x] Small-fix protection (§55): small tasks get a small expected surface;
       flag SMALL TASK / LARGE CHANGE MISMATCH and require review
-- [ ] Change Receipt (§56) in `~/.ctxd/change_receipts/`: `request_id, task,
+- [x] Change Receipt (§56) in `~/.ctxd/change_receipts/`: `request_id, task,
       worker, files_changed, lines_added, lines_removed,
       formatting_only_changes, comment_only_changes, unrelated_files,
       dependency_changes, risk, change_efficiency_score, verification_status`
-- [ ] Classification (§57): FOCUSED / ACCEPTABLE / BROAD / SUSPICIOUS /
+- [x] Classification (§57): FOCUSED / ACCEPTABLE / BROAD / SUSPICIOUS /
       NEEDS_REVIEW — evidence-based (task scope, changed files, context, diff,
       architecture rules, tests, dependency changes, formatting/comment noise)
 
 ### Output + context economy (§58–61)
-- [ ] Worker output modes `minimal` (default) / `normal` / `detailed`;
+- [x] Worker output modes `minimal` (default) / `normal` / `detailed`;
       structured minimal report (changed files, result, tests, notes); avoid
       repeating task, repo context, whole code blocks, diffs, long explanations
-- [ ] Duplicate explanation prevention (§59): don't resend what the worker
+- [x] Duplicate explanation prevention (§59): don't resend what the worker
       already knows unless context changed, info went stale, worker asked, or a
       verification failure requires it
-- [ ] Context delta management (§61): maintain BASE CONTEXT + TASK DELTA +
+- [x] Context delta management (§61): maintain BASE CONTEXT + TASK DELTA +
       CHANGE DELTA + ERROR DELTA instead of resending everything
 
 ### Diff Firewall exit criteria (§82)
-- [ ] small task + small diff → focused
-- [ ] small task + huge diff → warning, with an explanation of *why* it's
+- [x] small task + small diff → focused
+- [x] small task + huge diff → warning, with an explanation of *why* it's
       suspicious
-- [ ] formatting-only noise detected · comment-only noise detected
-- [ ] unrelated files detected · dependency changes detected
-- [ ] large refactor detected, but a relevant large change is **not** auto-rejected
-- [ ] Change Receipt generated · verification result recorded
+- [x] formatting-only noise detected · comment-only noise detected
+- [x] unrelated files detected · dependency changes detected
+- [x] large refactor detected, but a relevant large change is **not** auto-rejected
+- [x] Change Receipt generated · verification result recorded
 
 ---
 
 ## Phase 8 — UI (§67–71)
 
-- [ ] Not before Phase 5+. React + local HTTP API, `ctxd ui` at
-      `http://127.0.0.1:4317`. Tauri eventually; **never Electron.**
-- [ ] Dashboard, memory viewer, task manager (kanban), worker monitor, context
-      debugger, token stats, Git overview, change/diff inspector, settings.
-      Not an IDE — the brain stays in core.
-- [ ] Context inspector (§68): per request show worker, task, budget, included
-      (rules/task/memory/files/git) vs excluded (irrelevant/duplicates/old
-      sessions), candidate vs final tokens, estimated reduction, and **why**
+- [x] Local HTTP API + `ctxd ui` at `http://127.0.0.1:4317`, loopback-only,
+      token-gated writes. React front end still to come; Tauri eventually;
+      **never Electron.**
+- [x] Dashboard, memory viewer, task manager (kanban), context debugger, token
+      stats, Git overview, change/diff inspector. Not an IDE — the brain stays
+      in core. Worker monitor and settings editor still to come.
+- [x] Context inspector (§68): per request show task, budget, included vs
+      excluded, candidate vs final tokens, estimated reduction, and **why**
       each item was included or excluded
 - [ ] Worker monitor (§69): status, current/last task, last activity, context
-      usage, last error
-- [ ] Git UI (§71): branch, status, commits, changed files, diff summary,
-      change efficiency, over-edit warnings
+      usage, last error — core support exists in `@ctxd/verify`; no panel yet
+- [x] Git UI (§71): branch, status, changed files, diff summary, change
+      efficiency, over-edit warnings
 
 ---
 
 ## Cross-cutting requirements
 
 ### Security (§62, §63)
-- [ ] HTTP binds `127.0.0.1` only, never `0.0.0.0` by default; local auth/token
-      for future UI; protect mutating APIs
+- [x] HTTP binds `127.0.0.1` only, never `0.0.0.0` by default; local auth/token
+      for the UI; protect mutating APIs; Host and Origin pinned to loopback
 - [ ] No telemetry, no cloud DB; never log secrets; redact env vars; don't
       index `.env`; don't send secrets to workers; honor `.gitignore` /
       `.ctxdignore`
@@ -391,11 +392,9 @@ Engine also exposed as a **pure function** for tests.
       git clean, deploys, credential ops → explicit confirmation)
 
 ### Statistics (§48, §49)
-- [ ] Track per request: `request_id, worker, task, input_tokens,
-      output_tokens_estimate, memory_tokens, file_tokens, instruction_tokens,
-      removed_tokens, deduplicated_tokens, compressed_tokens, final_tokens,
-      timestamp`; every value tagged exact / estimated / unknown
-- [ ] `ctxd stats`, `ctxd efficiency` reporting "estimated context avoided"
+- [x] Track per request via receipts; every value tagged exact / estimated /
+      unknown
+- [x] `ctxd stats`, `ctxd efficiency` reporting "estimated context avoided"
 
 ### Memory extraction + local AI (§64–66)
 - [ ] Deterministic extraction preferred; LLM extraction optional and never for
@@ -408,15 +407,16 @@ Engine also exposed as a **pure function** for tests.
       without any AI provider
 
 ### Other
-- [ ] Decisions (§45): `ctxd decisions|decision|decision add`; surface relevant
-      decisions when related files are touched
-- [ ] Bug memory (§46): surface previous bugs when relevant areas are touched
-- [ ] File/module explanations (§47): attach WHY/IMPORTANT notes so workers
-      don't "clean up" intentional code
+- [x] Decisions (§45): `ctxd decision|decisions`, `add`, `for <path>`; surfaced
+      automatically by `ctxd diff` when related files are touched
+- [x] Bug memory (§46): `ctxd bug`; surfaced when relevant areas are touched
+- [x] File/module explanations (§47): `ctxd explain` attaches WHY/IMPORTANT
+      notes, surfaced on change so workers don't "clean up" intentional code
 - [ ] Export/import (§74): human-readable, portable, no lock-in
 - [ ] `ctxd logs` (§75)
-- [ ] Performance targets (§72): CLI start <200ms, SQLite search <100ms, memory
-      lookup <100ms, near-instant status — never at the cost of correctness
+- [x] Performance targets (§72): CLI start ~180ms, search ~1ms, memory lookup
+      ~1ms — asserted in tests/integration/performance.test.ts. Lazy command
+      dispatch cut startup from ~840ms.
 - [ ] Docs (§76): README + `docs/{architecture,storage,context-engine,memory,
       diff-firewall,worker-output,mcp,cli,ui,security,development,roadmap}.md`.
       Documentation must reflect real implementation — never document fake

@@ -3,7 +3,7 @@
 This document describes what exists today. It is updated as each phase lands,
 and it never describes unimplemented features as if they worked.
 
-Current phase: **6 (tasks, sessions, checkpoints, handoffs) complete**.
+Current phase: **9 (optimisation and benchmarks) complete**.
 
 ## Shape
 
@@ -15,11 +15,11 @@ Current phase: **6 (tasks, sessions, checkpoints, handoffs) complete**.
                      │
         ┌────────────┼────────────┐
         ▼            ▼            ▼
-       CLI          MCP        HTTP API        (the HTTP API is a
-        │            │            │             future phase)
+       CLI          MCP        HTTP API
+        │            │            │
         ▼            ▼            ▼
    developer    Claude/Cursor   React UI
-   terminal       workers
+   terminal       workers       (loopback only)
 ```
 
 ctxd is the persistent engineering layer. AI workers are replaceable: no
@@ -40,8 +40,13 @@ architectural need appears, not for symmetry.
 | `@ctxd/project` | Project detection, incremental indexing, read-only Git inspection |
 | `@ctxd/memory` | Project memory: authority, storage, FTS5 search |
 | `@ctxd/firewall` | Composition root: memory and Git retrieval feeding the context engine |
+| `@ctxd/diff` | The Diff Firewall: change surface, noise detection, over-edit signals, Change Receipts |
+| `@ctxd/verify` | Workers, controlled execution, verification, architecture drift, correction context |
 | `@ctxd/work` | Tasks, sessions, checkpoints, handoffs |
 | `@ctxd/mcp` | Model Context Protocol server exposing the same services |
+| `@ctxd/stats` | Aggregates receipts into token statistics and efficiency reports |
+| `@ctxd/api` | Local HTTP API on 127.0.0.1, token-gated writes, serves the interface |
+| `@ctxd/ui` | React interface, built by Vite to static files (build-time deps only) |
 | `@ctxd/cli` | Argument parsing and commands |
 
 Dependency direction is strictly one-way:
@@ -52,7 +57,16 @@ utils ← context ←─────────┘
         db ← project ←── firewall
         db ← memory ←────┘
                   firewall ← mcp ← cli
+        context ← diff ← verify ← cli
+        firewall + diff ←── api ← cli
+                            api serves ui/dist (static)
 ```
+
+`@ctxd/diff` depends on nothing but `@ctxd/context` (for token estimation and
+term normalisation) and reads Git directly, so the Diff Firewall can be
+exercised as a pure function over a parsed diff with no database involved.
+`@ctxd/verify` builds on it: a correction context needs to know which file the
+failure points at.
 
 `@ctxd/firewall` is the composition root. It is a package rather than CLI code
 because MCP and the HTTP API must call the same services — business logic is
@@ -62,8 +76,9 @@ never duplicated per entry point.
 returns a database, so it can be used from tests and future packages without
 dragging configuration along.
 
-Planned packages (`memory`, `search`, `git`, `workers`, `mcp`, `api`, `ui`)
-arrive with the phases that need them, not before.
+Packages arrive with the phases that need them, not before. `@ctxd/ui` is the
+only one with a dependency tree, and it is build-time only: React and Vite
+produce static files, and nothing remote is fetched at runtime.
 
 `@ctxd/context` depends only on `@ctxd/utils`, so the engine can be exercised
 as a pure function without configuration or a database — which is what the
@@ -146,6 +161,20 @@ asked. File reads are confined to the project root.
 
 `task`, `session`, `checkpoint`, `handoff` and `resume` carry work across
 interruptions; see [work.md](work.md).
+
+`diff` inspects a worker's changes and `verify` runs the project's own checks;
+see [diff-firewall.md](diff-firewall.md) and [verification.md](verification.md).
+
+`ui` serves the local HTTP API and the built interface on 127.0.0.1; see
+[api.md](api.md) and [ui.md](ui.md).
+
+`stats` and `efficiency` aggregate receipts into a reduction report; see
+[benchmarks.md](benchmarks.md).
+
+Commands are imported on demand. Loading them all up front dragged the whole
+dependency graph — including the SQLite binding — into `ctxd --version`, which
+cost roughly 840ms per invocation; lazy dispatch brings startup to ~180ms
+against a bare-Node floor of ~140ms (§72).
 
 `init` detects a project, registers it and indexes its files. Detection reads
 real manifest files and records the evidence for every conclusion; nothing is
