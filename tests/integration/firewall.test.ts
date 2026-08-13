@@ -458,3 +458,84 @@ describe("collection scope", () => {
     db.close();
   });
 });
+
+describe("progressive retrieval refuses secrets (§62)", () => {
+  /**
+   * Regression, and the most serious defect found in this codebase so far:
+   * `contextFile` — reachable by a worker through the MCP tool `ctx_file_get` —
+   * confined reads to the project root but applied no ignore rules. `.env`,
+   * `id_rsa` and everything under `secrets/` live *inside* the root, so a
+   * containment check admitted them and returned their contents verbatim.
+   *
+   * Collection refused those files all along, which made "ctxd never sends
+   * secrets to workers" true of the pipeline and false of the one path a
+   * worker actually drives.
+   */
+  function secretFixture(name: string): string {
+    const root = join(home.dir, `secrets-${name}`);
+    mkdirSync(join(root, "secrets"), { recursive: true });
+    mkdirSync(join(root, "src"), { recursive: true });
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name }));
+    writeFileSync(join(root, ".env"), "STRIPE_API_KEY=sk_live_not_a_real_key\n");
+    writeFileSync(join(root, ".ENV"), "CASE=variant\n");
+    writeFileSync(join(root, "id_rsa"), "-----BEGIN OPENSSH PRIVATE KEY-----\n");
+    writeFileSync(join(root, ".npmrc"), "//registry.example.com/:_authToken=token\n");
+    writeFileSync(join(root, "secrets", "creds.txt"), "password=hunter2\n");
+    writeFileSync(join(root, "src", "app.ts"), "export const value = 1;\n");
+    return root;
+  }
+
+  it("refuses every secret a worker might ask for by name", () => {
+    const root = secretFixture("refuse");
+
+    for (const path of [".env", ".ENV", "id_rsa", ".npmrc", "secrets/creds.txt"]) {
+      assert.throws(
+        () => contextFile(root, path),
+        (error: Error) => error.name === "SecretFileError",
+        `${path} was readable`,
+      );
+    }
+  });
+
+  it("never returns secret content, even partially", () => {
+    const root = secretFixture("content");
+
+    for (const path of [".env", "id_rsa", "secrets/creds.txt"]) {
+      let content = "";
+      try {
+        content = contextFile(root, path)?.content ?? "";
+      } catch {
+        content = "";
+      }
+      assert.ok(!content.includes("sk_live"), `${path} leaked a key`);
+      assert.ok(!content.includes("hunter2"), `${path} leaked a password`);
+      assert.ok(!content.includes("PRIVATE KEY"), `${path} leaked a private key`);
+    }
+  });
+
+  it("honours .ctxdignore as well as the built-in patterns", () => {
+    const root = secretFixture("ctxdignore");
+    mkdirSync(join(root, "internal"), { recursive: true });
+    writeFileSync(join(root, "internal", "notes.md"), "private notes\n");
+    writeFileSync(join(root, ".ctxdignore"), "internal/\n");
+
+    assert.throws(
+      () => contextFile(root, "internal/notes.md"),
+      (error: Error) => error.name === "SecretFileError",
+    );
+  });
+
+  it("still reads ordinary source", () => {
+    const root = secretFixture("source");
+    const slice = contextFile(root, "src/app.ts");
+    assert.equal(slice?.content.trim(), "export const value = 1;");
+  });
+
+  it("still refuses a path outside the project", () => {
+    const root = secretFixture("escape");
+    assert.throws(
+      () => contextFile(root, "../../../etc/passwd"),
+      (error: Error) => error.name === "PathEscapesProjectError",
+    );
+  });
+});

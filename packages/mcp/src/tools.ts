@@ -10,6 +10,7 @@ import {
   contextHistory,
   contextSearch,
   PathEscapesProjectError,
+  SecretFileError,
 } from "@ctxd/firewall";
 import {
   getMemory,
@@ -383,7 +384,11 @@ export function createTools(ctx: ToolContext): ToolDefinition[] {
               slice.content,
           };
         } catch (error) {
+          // Both refusals are answers, not faults: one path escapes the
+          // project, the other names a secret. Rethrowing would turn a correct
+          // refusal into a tool crash.
           if (error instanceof PathEscapesProjectError) return fail(error.message);
+          if (error instanceof SecretFileError) return fail(error.message);
           throw error;
         }
       },

@@ -1,6 +1,13 @@
 import { readFileSync, statSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
-import { estimateTokens } from "@ctxd/context";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import {
+  compileIgnoreRules,
+  DEFAULT_IGNORE_PATTERNS,
+  estimateTokens,
+  isIgnored,
+  readIgnoreFile,
+  type IgnoreRule,
+} from "@ctxd/context";
 import type { Db } from "@ctxd/db";
 import { getMemory, listMemories, searchMemories, touchMemory } from "@ctxd/memory";
 import { inspectGit, type GitCommit } from "@ctxd/project";
@@ -126,6 +133,54 @@ export class PathEscapesProjectError extends Error {
   }
 }
 
+/**
+ * A worker asked for a file ctxd refuses to read to anyone.
+ *
+ * Separate from `PathEscapesProjectError` because the path is legitimate — it
+ * is the *contents* that must never reach a model.
+ */
+export class SecretFileError extends Error {
+  constructor(readonly requested: string) {
+    super(`refusing to read ${requested}: it matches a secret or ignored pattern`);
+    this.name = "SecretFileError";
+  }
+}
+
+/**
+ * Ignore rules for a project root, compiled once per root.
+ *
+ * Progressive retrieval has to apply exactly the rules collection applies.
+ * Confinement alone is not enough: `.env` is inside the project root, so a
+ * containment check happily admits it.
+ */
+const ignoreCache = new Map<string, IgnoreRule[]>();
+
+function rulesFor(root: string): IgnoreRule[] {
+  const cached = ignoreCache.get(root);
+  if (cached !== undefined) return cached;
+
+  const rules = [
+    ...compileIgnoreRules(DEFAULT_IGNORE_PATTERNS, "default"),
+    ...readIgnoreFile(join(root, ".gitignore")),
+    ...readIgnoreFile(join(root, ".ctxdignore")),
+  ];
+  ignoreCache.set(root, rules);
+  return rules;
+}
+
+/**
+ * Would collection have refused this file?
+ *
+ * The check runs on the path *relative to the root*, matching how the walker
+ * evaluates it, and on every parent segment — a file inside `secrets/` is
+ * refused even though its own name looks innocent.
+ */
+export function isRefusedPath(root: string, absolute: string): boolean {
+  const relativePath = relative(root, absolute).split(sep).join("/");
+  if (relativePath === "" || relativePath.startsWith("..")) return true;
+  return isIgnored(relativePath, rulesFor(root), false);
+}
+
 export interface FileOptions {
   readonly fromLine?: number;
   readonly toLine?: number;
@@ -150,6 +205,15 @@ export function contextFile(
 
   if (!isSubPath(root, absolute)) {
     throw new PathEscapesProjectError(requestedPath);
+  }
+
+  // Confinement is not enough. `.env`, `id_rsa` and everything under
+  // `secrets/` live *inside* the project root, so a containment check admits
+  // them. Progressive retrieval is the one path a worker drives directly, and
+  // it must refuse exactly what collection refuses — otherwise "ctxd never
+  // sends secrets to workers" is true of the pipeline and false of the tool.
+  if (isRefusedPath(root, absolute)) {
+    throw new SecretFileError(requestedPath);
   }
 
   let stats;

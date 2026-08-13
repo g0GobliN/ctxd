@@ -22,17 +22,33 @@ and the MCP server, which speaks a protocol over stdio.
 
 ## Secrets are never collected
 
-Refused at collection time, so a secret cannot reach the index, a receipt, a log
-or a worker:
+Refused at **collection** time and at **retrieval** time, so a secret cannot
+reach the index, a receipt, a log or a worker:
 
 - `.env` and every variant
 - `*.pem`, `*.key`, `*.p12`
 - anything under `secrets/` or `private/`
 - everything `.gitignore` and `.ctxdignore` exclude
 
-The golden benchmark asserts this against a fixture that **contains a real
-`.env`** — the assertion would prove nothing against a repository with no secret
-in it.
+Matching is case-insensitive. Windows and macOS filesystems are themselves
+case-insensitive, so `.ENV` and `.env` are the same file there, and matching
+case-sensitively would collect a secret the user believes is ignored. The trade
+is asymmetric: over-ignoring costs one file, under-ignoring leaks a credential
+to a model.
+
+Both gates matter, and for a while only the first existed. `ctx_file_get` — the
+MCP tool a worker calls to read a file — confined reads to the project root but
+applied no ignore rules. `.env`, `id_rsa` and everything under `secrets/` live
+*inside* the root, so containment admitted them and returned their contents
+verbatim. Collection had refused those files all along, which made "ctxd never
+sends secrets to workers" true of the pipeline and false of the one path a
+worker actually drives. Progressive retrieval now applies exactly the rules
+collection applies, and refuses with a `SecretFileError`.
+
+The golden benchmarks assert the collection half against fixtures that
+**contain a real `.env`** — the assertion would prove nothing against a
+repository with no secret in it. The retrieval half is asserted separately,
+including that no partial content escapes.
 
 Logs pass every field through `redactSecrets()` before writing, so a credential
 collected by mistake upstream still cannot land in a log file.
