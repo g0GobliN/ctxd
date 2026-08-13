@@ -24,6 +24,39 @@ export interface ProjectRow {
 export function upsertProject(db: Db, project: DetectedProject, now = new Date()): ProjectRow {
   const timestamp = now.toISOString();
 
+  // A directory can be registered before it becomes a Git repository, and
+  // identity anchors to the root commit once one exists — so re-registering
+  // the same directory can arrive with a different id. `root` is UNIQUE, so
+  // inserting would fail with a raw constraint error.
+  //
+  // The established row wins. Its id is what project memory, tasks and
+  // sessions already point at, and forking the project or crashing would both
+  // be worse than keeping the identity the data is attached to.
+  const established = findProjectByRoot(db, project.root);
+  if (established !== undefined && established.id !== project.id) {
+    db.prepare(
+      `UPDATE projects SET
+         name            = ?,
+         vcs             = ?,
+         runtime         = ?,
+         language        = ?,
+         package_manager = ?,
+         framework       = ?,
+         updated_at      = ?
+       WHERE id = ?`,
+    ).run(
+      project.name,
+      project.vcs,
+      project.runtime,
+      project.language,
+      project.packageManager,
+      project.framework,
+      timestamp,
+      established.id,
+    );
+    return getProject(db, established.id) as ProjectRow;
+  }
+
   db.prepare(
     `INSERT INTO projects
        (id, root, name, vcs, runtime, language, package_manager, framework, created_at, updated_at)

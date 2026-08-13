@@ -1,4 +1,5 @@
 import { strict as assert } from "node:assert";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -263,5 +264,46 @@ describe("writeProjectStorage", () => {
       "project.md",
       "stack.md",
     ]);
+  });
+});
+
+describe("re-registering a directory that gained a Git identity", () => {
+  /**
+   * Regression: `ctxd init` in a plain directory, then `git init`, then
+   * `ctxd init` again. Identity anchors to the root commit once one exists, so
+   * the second registration arrives with a different id for the same `root` —
+   * and `root` is UNIQUE. It used to fail with a raw SQLITE_CONSTRAINT_UNIQUE.
+   */
+  it("keeps the established project rather than failing on the unique root", () => {
+    const home = createTempHome();
+    const root = join(home.dir, "late-git");
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "late-git" }));
+
+    const db = openDatabase(join(home.dir, "late-git.db"));
+    try {
+      migrate(db);
+
+      const before = upsertProject(db, detectProject(root));
+
+      execFileSync("git", ["init", "--quiet"], { cwd: root });
+      execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+      execFileSync("git", ["config", "user.name", "ctxd test"], { cwd: root });
+      execFileSync("git", ["add", "."], { cwd: root });
+      execFileSync("git", ["commit", "--quiet", "-m", "first"], { cwd: root });
+
+      const detected = detectProject(root);
+      const after = upsertProject(db, detected);
+
+      // The row the project's memory is attached to survives.
+      assert.equal(after.id, before.id);
+      assert.equal(after.root, before.root);
+      // Metadata still refreshes — it now knows the directory is a repository.
+      assert.equal(after.vcs, detected.vcs);
+      assert.equal(listProjects(db).length, 1);
+    } finally {
+      db.close();
+      home.cleanup();
+    }
   });
 });

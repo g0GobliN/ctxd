@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { inspectGit, type GitInfo } from "./git.js";
 
 export interface DetectedProject {
@@ -89,7 +89,16 @@ const FRAMEWORK_FILES: readonly (readonly [RegExp, string])[] = [
  */
 export function detectProject(dir: string): DetectedProject {
   const git = inspectGit(dir);
-  const root = git.insideWorkTree === true && git.root !== undefined ? git.root : dir;
+
+  // Git reports its top level with forward slashes even on Windows, while a
+  // plain directory arrives with the platform's separators. Both must resolve
+  // to the same string: `root` is the project's identity in the database and
+  // is UNIQUE, so two spellings of one directory would split a project's
+  // memory across two rows — and would do it silently, the moment a registered
+  // directory gained a Git repository.
+  const root = resolve(
+    git.insideWorkTree === true && git.root !== undefined ? git.root : dir,
+  );
 
   const evidence: string[] = [];
   const entries = existsSync(root)
