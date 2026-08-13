@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, before, describe, it } from "node:test";
@@ -25,18 +25,13 @@ import { createTempHome } from "../helpers/temp-home.ts";
 const CLI = fileURLToPath(new URL("../../packages/cli/dist/index.js", import.meta.url));
 
 /**
- * §72 targets, with headroom for a loaded machine.
+ * §72 targets for the in-process measurements.
  *
- * `cliOverheadMs` is what ctxd adds on top of starting Node at all, measured
- * against a bare `node -e ""` in the same conditions. Absolute startup is
- * mostly Node's own cost and swings with machine load — the whole suite runs
- * test files in parallel — so an absolute budget would measure the machine's
- * mood. The overhead is what this repository actually controls: it sits around
- * 40ms with lazy command dispatch and was roughly 700ms when every command was
- * imported eagerly.
+ * These run inside this process against a seeded database, so they are stable
+ * under the parallel suite in a way that spawning and timing a subprocess is
+ * not. Startup is covered structurally instead — see below.
  */
 const BUDGET = {
-  cliOverheadMs: 350,
   searchMs: 100,
   memoryLookupMs: 100,
 };
@@ -106,39 +101,45 @@ after(() => {
 });
 
 describe("performance targets (§72)", () => {
-  it("adds little to Node's own startup", () => {
-    const time = (args: readonly string[]): number => {
-      const started = performance.now();
-      execFileSync(process.execPath, args as string[], {
-        stdio: ["ignore", "pipe", "ignore"],
-      });
-      return performance.now() - started;
-    };
+  /**
+   * Startup is asserted structurally rather than by stopwatch.
+   *
+   * The cost this guards against is module loading: importing every command up
+   * front dragged in the whole dependency graph, including better-sqlite3's
+   * native binding, and cost ~840ms against a ~140ms bare-Node floor. Timing it
+   * here would be measuring the machine — the suite runs test files in
+   * parallel, and under that load bare Node alone takes hundreds of
+   * milliseconds — so the test asserts the property that produced the speed-up
+   * and cannot drift with load.
+   */
+  it("does not import a command, or the database driver, to print its version", () => {
+    const entry = readFileSync(CLI, "utf8");
 
-    // Warm up both paths so neither pays for first-run disk reads.
-    time(["-e", ""]);
-    time([CLI, "--version"]);
-
-    // Measure each pair back to back and take the median of the *differences*.
-    // A difference of medians would be noisy: the whole suite runs test files
-    // in parallel, so load can shift between two separate measurement blocks.
-    // Paired sampling cancels that out.
-    const differences: number[] = [];
-    const bareSamples: number[] = [];
-    for (let i = 0; i < 5; i += 1) {
-      const bare = time(["-e", ""]);
-      const withCtxd = time([CLI, "--version"]);
-      bareSamples.push(bare);
-      differences.push(withCtxd - bare);
-    }
-
-    const overhead = median(differences);
-    assert.ok(
-      overhead < BUDGET.cliOverheadMs,
-      `ctxd added ${overhead.toFixed(0)}ms to Node's ${median(bareSamples).toFixed(0)}ms ` +
-        `startup, budget ${BUDGET.cliOverheadMs}ms. ` +
-        "Something is being imported that a bare --version does not need.",
+    const staticImports = [...entry.matchAll(/^import\s[^;]*?from\s*["']([^"']+)["']/gm)].map(
+      (match) => match[1] as string,
     );
+
+    assert.deepEqual(
+      [...staticImports].sort(),
+      ["@ctxd/core", "node:url"],
+      "the CLI entry point may only import what --version and --help need; " +
+        "everything else must be loaded on demand",
+    );
+
+    // The command table must reach its handlers through dynamic import.
+    assert.match(entry, /await import\(/, "commands should be loaded on demand");
+    assert.ok(
+      !staticImports.some((specifier) => specifier.startsWith("./commands/")),
+      "no command module may be imported statically",
+    );
+  });
+
+  it("still prints its version correctly", () => {
+    const printed = execFileSync(process.execPath, [CLI, "--version"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    assert.match(printed, /^\d+\.\d+\.\d+/);
   });
 
   it("searches memory well inside the target", () => {
