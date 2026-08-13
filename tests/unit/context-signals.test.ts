@@ -191,3 +191,64 @@ describe("ignore rules", () => {
     assert.equal(isIgnored("nested/build.ts", custom, false), false);
   });
 });
+
+describe("secrets are never collectable", () => {
+  const rules = compileIgnoreRules(DEFAULT_IGNORE_PATTERNS, "default");
+
+  /**
+   * The asymmetry that governs these rules: over-ignoring costs one file,
+   * under-ignoring leaks a credential to a model. Every case below was
+   * collectable before the matcher was made case-insensitive and the
+   * extensionless credential files were named.
+   */
+  it("ignores dotenv files whatever their case or nesting", () => {
+    for (const path of [
+      ".env",
+      "config/.env",
+      ".env.production",
+      ".env.local.backup",
+      ".ENV",
+      ".Env.local",
+      "apps/api/.Env",
+    ]) {
+      assert.equal(isIgnored(path, rules, false), true, `collectable: ${path}`);
+    }
+  });
+
+  it("ignores secret directories whatever their case", () => {
+    for (const path of ["secrets/api.key", "Secrets/creds.txt", "SECRETS/x.txt", "deploy/Private/k.json"]) {
+      assert.equal(isIgnored(path, rules, false), true, `collectable: ${path}`);
+    }
+  });
+
+  it("ignores private keys that carry no extension", () => {
+    for (const path of ["id_rsa", "id_ed25519", "id_ecdsa", ".ssh/id_dsa"]) {
+      assert.equal(isIgnored(path, rules, false), true, `collectable: ${path}`);
+    }
+  });
+
+  it("ignores files whose whole purpose is holding a credential", () => {
+    for (const path of [".npmrc", ".netrc", ".pgpass", ".htpasswd", "aws/credentials"]) {
+      assert.equal(isIgnored(path, rules, false), true, `collectable: ${path}`);
+    }
+  });
+
+  it("ignores keystores and certificate bundles", () => {
+    for (const path of ["server.pem", "app.key", "bundle.p12", "keys/app.PFX", "release.jks"]) {
+      assert.equal(isIgnored(path, rules, false), true, `collectable: ${path}`);
+    }
+  });
+
+  it("does not over-ignore ordinary source and documentation", () => {
+    for (const path of [
+      "src/index.ts",
+      "docs/environment.md",
+      "src/keyboard.ts",
+      "private-api.md",
+      "src/credentials-form.tsx",
+      "README.md",
+    ]) {
+      assert.equal(isIgnored(path, rules, false), false, `wrongly ignored: ${path}`);
+    }
+  });
+});

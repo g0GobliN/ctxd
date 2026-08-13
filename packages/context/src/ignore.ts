@@ -19,6 +19,20 @@ export const DEFAULT_IGNORE_PATTERNS: readonly string[] = [
   "*.pem",
   "*.key",
   "*.p12",
+  "*.pfx",
+  "*.jks",
+  "*.keystore",
+  // SSH private keys carry no extension, so they need naming individually.
+  "id_rsa",
+  "id_dsa",
+  "id_ecdsa",
+  "id_ed25519",
+  // Files whose whole purpose is holding a credential.
+  ".npmrc",
+  ".netrc",
+  ".pgpass",
+  ".htpasswd",
+  "credentials",
   "*.log",
   "*.tsbuildinfo",
   ".DS_Store",
@@ -52,7 +66,12 @@ function globToRegExp(glob: string): RegExp {
       out += char;
     }
   }
-  return new RegExp(`^${out}$`);
+  // Case-insensitive on purpose. Windows and macOS filesystems are themselves
+  // case-insensitive, so `.ENV` and `.env` are the same file there — matching
+  // case-sensitively would collect a secret that the user believes is ignored.
+  // The trade is asymmetric: over-ignoring costs one file, under-ignoring leaks
+  // a credential to a model.
+  return new RegExp(`^${out}$`, "i");
 }
 
 /**
