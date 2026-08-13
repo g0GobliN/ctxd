@@ -1,0 +1,21 @@
+{
+  "name": "frontend-bug",
+  "task": "Fix the date picker popup clipping inside a scrolling panel",
+  "budget": 10000,
+  "minCandidateTokens": 50000,
+  "mustInclude": [
+    "src/components/DatePicker.tsx",
+    "docs/rules.md"
+  ],
+  "shouldInclude": [
+    "src/components/DatePicker.css",
+    "src/components/ScrollPanel.css"
+  ],
+  "mustExclude": [
+    "src/billing/billing-module-1.ts",
+    "src/hr/hr-module-1.ts",
+    "src/support/support-module-1.ts",
+    ".env"
+  ],
+  "mustDeduplicate": []
+}

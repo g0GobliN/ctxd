@@ -1,0 +1,22 @@
+.date-picker {
+  position: relative;
+}
+
+/*
+ * The popup is absolutely positioned against .date-picker. Inside a scrolling
+ * container this clips, because overflow on the ancestor establishes a new
+ * containing block. Fixing it means positioning against the viewport, or
+ * portalling the popup out of the scroll container entirely.
+ */
+.date-picker__popup {
+  position: absolute;
+  top: var(--popup-top);
+  left: var(--popup-left);
+  z-index: 10;
+  min-width: 260px;
+}
+
+.date-picker__input {
+  width: 100%;
+  padding: 8px 10px;
+}

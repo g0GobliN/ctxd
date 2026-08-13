@@ -1,0 +1,22 @@
+{
+  "name": "payment-flow",
+  "task": "Trace the checkout payment flow from cart total to recorded order",
+  "budget": 10000,
+  "minCandidateTokens": 50000,
+  "mustInclude": [
+    "src/checkout/order.ts",
+    "docs/rules.md"
+  ],
+  "shouldInclude": [
+    "src/checkout/cart.ts",
+    "src/payment/gateway.ts",
+    "src/checkout/order-repository.ts"
+  ],
+  "mustExclude": [
+    "src/warehouse/warehouse-module-1.ts",
+    "src/hr/hr-module-1.ts",
+    "src/energy/energy-module-1.ts",
+    ".env"
+  ],
+  "mustDeduplicate": []
+}

@@ -1,0 +1,20 @@
+{
+  "name": "api-refactor",
+  "task": "Refactor the API handlers to share one request validation helper",
+  "budget": 12000,
+  "minCandidateTokens": 50000,
+  "mustInclude": [
+    "docs/rules.md"
+  ],
+  "shouldInclude": [
+    "docs/api-conventions.md",
+    "src/api/handlers/users.ts"
+  ],
+  "mustExclude": [
+    "src/signage/signage-module-1.ts",
+    "src/fleet/fleet-module-1.ts",
+    "src/facilities/facilities-module-1.ts",
+    ".env"
+  ],
+  "mustDeduplicate": []
+}

@@ -1,0 +1,21 @@
+{
+  "name": "database-migration",
+  "task": "Split the customer name column into given and family name",
+  "budget": 10000,
+  "minCandidateTokens": 50000,
+  "mustInclude": [
+    "migrations/007_split_customer_name.sql",
+    "docs/rules.md"
+  ],
+  "shouldInclude": [
+    "docs/migrations.md",
+    "migrations/008_backfill_customer_name.sql"
+  ],
+  "mustExclude": [
+    "src/marketing/marketing-module-1.ts",
+    "src/support/support-module-1.ts",
+    "src/telemetry/telemetry-module-1.ts",
+    ".env"
+  ],
+  "mustDeduplicate": []
+}

@@ -1,0 +1,4 @@
+.scroll-panel {
+  overflow-y: auto;
+  max-height: 420px;
+}

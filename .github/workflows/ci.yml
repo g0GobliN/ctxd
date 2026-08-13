@@ -55,6 +55,7 @@ jobs:
       # "never collects secrets" assertion has a secret to find.
       - run: node --experimental-strip-types scripts/generate-fixture.ts
       - run: node --experimental-strip-types scripts/generate-benchmarks.ts
+      - run: node --experimental-strip-types scripts/generate-benchmarks-2.ts
       - run: pnpm test
 
   benchmark:
@@ -71,6 +72,7 @@ jobs:
       - run: pnpm build
       - run: node --experimental-strip-types scripts/generate-fixture.ts
       - run: node --experimental-strip-types scripts/generate-benchmarks.ts
+      - run: node --experimental-strip-types scripts/generate-benchmarks-2.ts
       # Retrieval quality is a product requirement, not a nice-to-have:
       # a regression here fails the build.
       - name: Run the golden benchmark
