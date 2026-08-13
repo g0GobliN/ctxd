@@ -119,9 +119,16 @@ describe("performance targets (§72)", () => {
       (match) => match[1] as string,
     );
 
+    // Node builtins are already resident and cost nothing to require. What
+    // must stay out is the workspace graph — anything that drags in the SQLite
+    // binding before ctxd has read its arguments.
+    const workspaceImports = staticImports.filter(
+      (specifier) => !specifier.startsWith("node:"),
+    );
+
     assert.deepEqual(
-      [...staticImports].sort(),
-      ["@ctxd/core", "node:url"],
+      [...workspaceImports].sort(),
+      ["@ctxd/core"],
       "the CLI entry point may only import what --version and --help need; " +
         "everything else must be loaded on demand",
     );
