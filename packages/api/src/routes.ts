@@ -14,6 +14,7 @@ import { buildProjectContext } from "@ctxd/firewall";
 import { listMemories, searchMemories } from "@ctxd/memory";
 import { describeGit, inspectGit, listProjects } from "@ctxd/project";
 import { buildResume, lastSession, listTasks, latestCheckpoint } from "@ctxd/work";
+import { KNOWN_WORKERS } from "@ctxd/verify";
 import type { Db } from "@ctxd/db";
 import {
   HttpError,
@@ -170,6 +171,84 @@ export function createRoutes(context: RouteContext): Route[] {
           checkpoint: latestCheckpoint(db, projectId),
         };
       },
+    },
+
+    {
+      // §69. Status is derived from recorded sessions, never inferred: a
+      // worker ctxd has not seen reads as "unknown" rather than "idle", because
+      // claiming a worker is idle when nothing was recorded would be a guess.
+      method: "GET",
+      path: "/api/workers",
+      mutating: false,
+      handler: (request) => {
+        const projectId = projectIdFor(context, request);
+        const sessions = db
+          .prepare(
+            `SELECT worker, task_id, started_at, ended_at, summary
+             FROM sessions
+             WHERE project_id = ? AND worker IS NOT NULL
+             ORDER BY started_at DESC`,
+          )
+          .all(projectId) as {
+            worker: string;
+            task_id: string | null;
+            started_at: string;
+            ended_at: string | null;
+            summary: string | null;
+          }[];
+
+        const seen = new Map<string, (typeof sessions)[number]>();
+        for (const session of sessions) {
+          if (!seen.has(session.worker)) seen.set(session.worker, session);
+        }
+
+        const known = KNOWN_WORKERS.map((definition) => {
+          const latest = seen.get(definition.id);
+          seen.delete(definition.id);
+          return {
+            id: definition.id,
+            name: definition.name,
+            capabilities: definition.capabilities,
+            state: latest === undefined ? "unknown" : latest.ended_at === null ? "active" : "idle",
+            source: latest === undefined ? "unknown" : "session",
+            lastActivity: latest?.ended_at ?? latest?.started_at ?? null,
+            currentTask: latest?.ended_at === null ? (latest.task_id ?? null) : null,
+            lastTask: latest?.task_id ?? null,
+            lastSummary: latest?.summary ?? null,
+          };
+        });
+
+        // Workers ctxd has never heard of still get reported: the registry is
+        // a set of labels, not a permitted list (§42).
+        const others = [...seen.entries()].map(([id, latest]) => ({
+          id,
+          name: id,
+          capabilities: [] as readonly string[],
+          state: latest.ended_at === null ? "active" : "idle",
+          source: "session",
+          lastActivity: latest.ended_at ?? latest.started_at,
+          currentTask: latest.ended_at === null ? (latest.task_id ?? null) : null,
+          lastTask: latest.task_id ?? null,
+          lastSummary: latest.summary ?? null,
+        }));
+
+        return { workers: [...known, ...others] };
+      },
+    },
+
+    {
+      // Read-only. Changing configuration from a browser would need a write
+      // path into the user's config file; the file itself is the interface.
+      method: "GET",
+      path: "/api/config",
+      mutating: false,
+      handler: () => ({
+        config,
+        configFile: paths.configFile,
+        dataDir: paths.dataDir,
+        editable: false,
+        note: "Configuration is read from the file above. ctxd does not write it from the interface.",
+      }),
     },
 
     {

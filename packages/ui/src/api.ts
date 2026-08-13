@@ -142,8 +142,30 @@ export const api = {
   resume: () => request<{ resume: string }>("/api/resume"),
   contextReceipts: () => request<{ receipts: ContextReceipt[] }>("/api/receipts/context"),
   changeReceipts: () => request<{ receipts: ChangeReceipt[] }>("/api/receipts/change"),
+  workers: () => request<{ workers: Worker[] }>("/api/workers"),
+  settings: () => request<Settings>("/api/config"),
   diff: (task: string) =>
     request<ChangeReceipt>(
       task.trim() === "" ? "/api/diff" : `/api/diff?task=${encodeURIComponent(task)}`,
     ),
 };
+
+export interface Worker {
+  readonly id: string;
+  readonly name: string;
+  readonly capabilities: readonly string[];
+  readonly state: string;
+  readonly source: string;
+  readonly lastActivity: string | null;
+  readonly currentTask: string | null;
+  readonly lastTask: string | null;
+  readonly lastSummary: string | null;
+}
+
+export interface Settings {
+  readonly config: Record<string, unknown>;
+  readonly configFile: string;
+  readonly dataDir: string;
+  readonly editable: boolean;
+  readonly note: string;
+}

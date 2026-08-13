@@ -24,6 +24,8 @@ interface works with no network at all (§66).
 | **Memory** | Project memory with FTS5 search, showing each memory's source and confidence |
 | **Tasks** | A kanban of tracked work by status |
 | **Resume** | The "what was I doing?" summary |
+| **Workers** | Who has worked on the project (§69): state, current and last task, last activity |
+| **Settings** | Configuration file, storage location and current values — read-only |
 
 The context inspector is the panel that matters. It shows the candidate-to-final
 reduction as a proportion, lists every included item with its reason and every
@@ -63,11 +65,13 @@ build-time only: `react`, `react-dom`, `vite`, `@vitejs/plugin-react` and their
 transitive packages. Nothing ships into the core packages, and the built bundle
 contains no dependency on anything remote.
 
-There is no router (six panels are component state), no CSS framework, and no
+There is no router (eight panels are component state), no CSS framework, and no
 state library. Each would be a dependency added for tidiness rather than need.
 
-## Not built yet
+## Settings
 
-§69's worker monitor and §70's settings editor. Worker status is available from
-the core (`@ctxd/verify` exposes it, honestly reporting `unknown` when ctxd
-cannot determine it), but no panel renders it yet.
+Read-only. The panel shows the configuration file's path, the storage directory
+and the current values, and says plainly that ctxd does not write configuration
+from the interface. `POST /api/config` does not exist — the file is the
+interface, and a browser-driven write path into it would be a larger surface
+than the feature is worth.

@@ -18,6 +18,7 @@
     "@ctxd/memory": "workspace:*",
     "@ctxd/project": "workspace:*",
     "@ctxd/utils": "workspace:*",
+    "@ctxd/verify": "workspace:*",
     "@ctxd/work": "workspace:*"
   }
 }

@@ -5,13 +5,15 @@ import {
   Dashboard,
   MemoryViewer,
   Resume,
+  SettingsView,
   TaskBoard,
+  WorkerMonitor,
 } from "./panels.js";
 
 /**
  * The shell.
  *
- * Navigation is component state rather than a router: six panels do not need
+ * Navigation is component state rather than a router: eight panels do not need
  * URL routing, and a router would be the first dependency added for tidiness
  * rather than need.
  */
@@ -23,6 +25,8 @@ const PANELS = [
   { id: "memory", label: "Memory", render: () => <MemoryViewer /> },
   { id: "tasks", label: "Tasks", render: () => <TaskBoard /> },
   { id: "resume", label: "Resume", render: () => <Resume /> },
+  { id: "workers", label: "Workers", render: () => <WorkerMonitor /> },
+  { id: "settings", label: "Settings", render: () => <SettingsView /> },
 ] as const;
 
 export function App(): ReactNode {

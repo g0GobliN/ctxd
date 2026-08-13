@@ -286,3 +286,39 @@ describe("serving the built interface (§67)", () => {
     assert.equal(body.error, "not found");
   });
 });
+
+describe("worker monitor and settings (§67, §69)", () => {
+  it("reports an unseen worker as unknown rather than idle", async () => {
+    // No project is registered in this temp home, so the route explains that
+    // rather than inventing a worker list.
+    const response = await get("/api/workers");
+    assert.equal(response.status, 404);
+    const body = (await response.json()) as { error: string };
+    assert.match(body.error, /ctxd init/);
+  });
+
+  it("serves configuration read-only", async () => {
+    const response = await get("/api/config");
+    assert.equal(response.status, 200);
+
+    const body = (await response.json()) as {
+      configFile: string;
+      dataDir: string;
+      editable: boolean;
+      config: { mode?: string };
+    };
+    assert.equal(body.editable, false, "the interface must not offer to write configuration");
+    assert.equal(body.dataDir, paths.dataDir);
+    assert.equal(body.configFile, paths.configFile);
+    assert.ok(typeof body.config.mode === "string");
+  });
+
+  it("does not accept a write to the configuration route", async () => {
+    const response = await fetch(`${api.url}/api/config`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ mode: "cheap" }),
+    });
+    assert.equal(response.status, 405);
+  });
+});

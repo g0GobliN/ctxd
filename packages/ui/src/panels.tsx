@@ -456,3 +456,80 @@ export function Resume(): ReactNode {
     </>
   );
 }
+
+/* Worker monitor (§69) ------------------------------------------------------ */
+
+export function WorkerMonitor(): ReactNode {
+  const { data, error, loading } = useApi(() => api.workers());
+  const workers = data?.workers ?? [];
+
+  return (
+    <>
+      <h1>Workers</h1>
+      <p className="subtitle">
+        Who has been working on this project. Workers are replaceable; the memory is not.
+      </p>
+
+      <Panel loading={loading} error={error}>
+        <div className="rows">
+          {workers.map((worker) => (
+            <div className="row" key={worker.id}>
+              <div className="row-head">
+                <strong>{worker.name}</strong>
+                <span className={`tag ${worker.state === "active" ? "ok" : ""}`}>
+                  {worker.state}
+                </span>
+              </div>
+              <div className="reason">
+                {/* An unknown status is shown as unknown. Claiming a worker is
+                    idle when ctxd recorded nothing would be a guess. */}
+                {worker.source === "unknown"
+                  ? "no recorded activity — ctxd has not seen this worker on this project"
+                  : `last activity ${formatTime(worker.lastActivity ?? "")}`}
+              </div>
+              {worker.currentTask !== null && (
+                <div className="reason">current task: {worker.currentTask}</div>
+              )}
+              {worker.currentTask === null && worker.lastTask !== null && (
+                <div className="reason">last task: {worker.lastTask}</div>
+              )}
+              {worker.lastSummary !== null && <pre>{worker.lastSummary}</pre>}
+              {worker.capabilities.length > 0 && (
+                <div className="reason">capabilities: {worker.capabilities.join(", ")}</div>
+              )}
+            </div>
+          ))}
+        </div>
+        <p className="disclaimer">
+          ctxd knows these names but nothing about how any of them work. No provider SDK is
+          involved, and a worker it has never heard of appears here just the same.
+        </p>
+      </Panel>
+    </>
+  );
+}
+
+/* Settings (§67) ------------------------------------------------------------ */
+
+export function SettingsView(): ReactNode {
+  const { data, error, loading } = useApi(() => api.settings());
+
+  return (
+    <>
+      <h1>Settings</h1>
+      <p className="subtitle">Read-only. The configuration file is the interface.</p>
+
+      <Panel loading={loading} error={error}>
+        <h2>Configuration file</h2>
+        <div className="card path">{data?.configFile}</div>
+        <p className="disclaimer">{data?.note}</p>
+
+        <h2>Storage</h2>
+        <div className="card path">{data?.dataDir}</div>
+
+        <h2>Current values</h2>
+        <pre>{JSON.stringify(data?.config ?? {}, null, 2)}</pre>
+      </Panel>
+    </>
+  );
+}
