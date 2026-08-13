@@ -1,7 +1,12 @@
 packages:
   - "packages/*"
 
-# better-sqlite3 is a native module; its install script fetches or builds the
-# binding. It is the only package allowed to run install scripts.
+# Native modules whose install scripts place a platform binary. Nothing else is
+# allowed to run install scripts.
+#
+# better-sqlite3 — the SQLite binding.
+# esbuild       — used by Vite to build the interface; a build-time dependency
+#                 that never ships in the published bundle.
 allowBuilds:
   better-sqlite3: true
+  esbuild: true

@@ -8,6 +8,10 @@
     { "path": "./packages/project" },
     { "path": "./packages/memory" },
     { "path": "./packages/firewall" },
+    { "path": "./packages/diff" },
+    { "path": "./packages/verify" },
+    { "path": "./packages/stats" },
+    { "path": "./packages/api" },
     { "path": "./packages/work" },
     { "path": "./packages/mcp" },
     { "path": "./packages/cli" }

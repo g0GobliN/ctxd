@@ -13,14 +13,18 @@
     }
   },
   "dependencies": {
+    "@ctxd/api": "workspace:*",
     "@ctxd/context": "workspace:*",
     "@ctxd/core": "workspace:*",
     "@ctxd/db": "workspace:*",
+    "@ctxd/diff": "workspace:*",
     "@ctxd/firewall": "workspace:*",
     "@ctxd/mcp": "workspace:*",
     "@ctxd/memory": "workspace:*",
     "@ctxd/project": "workspace:*",
+    "@ctxd/stats": "workspace:*",
     "@ctxd/utils": "workspace:*",
+    "@ctxd/verify": "workspace:*",
     "@ctxd/work": "workspace:*"
   }
 }
