@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../context" },
+    { "path": "../core" },
+    { "path": "../db" },
+    { "path": "../diff" },
+    { "path": "../firewall" },
+    { "path": "../memory" },
+    { "path": "../project" },
+    { "path": "../utils" },
+    { "path": "../work" }
+  ]
+}
