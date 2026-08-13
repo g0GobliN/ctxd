@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { VERSION } from "@ctxd/core";
 
 export const HELP = `ctxd — local-first AI engineering manager and context firewall
@@ -109,10 +110,35 @@ ${HELP}
   return (await load())(rest);
 }
 
+/**
+ * Was this module executed, rather than imported?
+ *
+ * Comparing `import.meta.url` to `process.argv[1]` as strings is wrong the
+ * moment the CLI is launched through its installed `bin` shim: the shim
+ * resolves symlinks, so argv[1] is the real file inside the package store while
+ * `import.meta.url` is the path the loader used. The two never match, and the
+ * CLI silently did nothing — exit 0, no output, for every command.
+ *
+ * Both sides are therefore reduced to a canonical real path. Case is folded on
+ * Windows and macOS, whose filesystems treat paths case-insensitively.
+ */
 function isDirectRun(): boolean {
   const entry = process.argv[1];
   if (entry === undefined) return false;
-  return import.meta.url === pathToFileURL(entry).href;
+
+  const canonical = (path: string): string => {
+    let resolved = path;
+    try {
+      resolved = realpathSync(path);
+    } catch {
+      // A path that cannot be resolved is compared as given.
+    }
+    return process.platform === "win32" || process.platform === "darwin"
+      ? resolved.toLowerCase()
+      : resolved;
+  };
+
+  return canonical(fileURLToPath(import.meta.url)) === canonical(entry);
 }
 
 if (isDirectRun()) {

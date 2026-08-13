@@ -267,3 +267,47 @@ describe("ctxd status", () => {
     assert.match(stdout, /ctxd status/);
   });
 });
+
+describe("the installed binary actually runs", () => {
+  /**
+   * Regression: `isDirectRun()` compared `import.meta.url` to `process.argv[1]`
+   * as strings. Launched through its `bin` shim the CLI sees a symlink-resolved
+   * argv[1], so the two never matched and the entry point was skipped —
+   * every command exited 0 and printed nothing.
+   *
+   * Nothing caught it because the suite invoked dist/index.js directly. This
+   * runs the shim the way an installed user does.
+   */
+  const shim = fileURLToPath(
+    new URL(
+      process.platform === "win32"
+        ? "../../node_modules/.bin/ctxd.CMD"
+        : "../../node_modules/.bin/ctxd",
+      import.meta.url,
+    ),
+  );
+
+  it("prints its version through the bin shim", () => {
+    if (!existsSync(shim)) return; // Only meaningful after pnpm install.
+
+    const printed = execFileSync(shim, ["--version"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      ...(process.platform === "win32" ? { shell: true } : {}),
+    }).trim();
+
+    assert.match(printed, /^\d+\.\d+\.\d+$/, "the installed binary produced no version");
+  });
+
+  it("prints help through the bin shim", () => {
+    if (!existsSync(shim)) return;
+
+    const printed = execFileSync(shim, ["--help"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      ...(process.platform === "win32" ? { shell: true } : {}),
+    });
+
+    assert.match(printed, /ctxd <command>/, "the installed binary produced no help");
+  });
+});
