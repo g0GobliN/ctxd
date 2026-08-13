@@ -13,6 +13,7 @@
     }
   },
   "dependencies": {
+    "@ctxd/ai": "workspace:*",
     "@ctxd/api": "workspace:*",
     "@ctxd/context": "workspace:*",
     "@ctxd/core": "workspace:*",

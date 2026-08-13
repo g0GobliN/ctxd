@@ -18,6 +18,7 @@
     "build:all": "pnpm build && pnpm build:ui"
   },
   "devDependencies": {
+    "@ctxd/ai": "workspace:*",
     "@ctxd/api": "workspace:*",
     "@ctxd/cli": "workspace:*",
     "@ctxd/context": "workspace:*",

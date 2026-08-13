@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@ctxd/ai':
+        specifier: workspace:*
+        version: link:packages/ai
       '@ctxd/api':
         specifier: workspace:*
         version: link:packages/api
@@ -60,6 +63,15 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/ai:
+    dependencies:
+      '@ctxd/context':
+        specifier: workspace:*
+        version: link:../context
+      '@ctxd/memory':
+        specifier: workspace:*
+        version: link:../memory
+
   packages/api:
     dependencies:
       '@ctxd/context':
@@ -95,6 +107,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@ctxd/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@ctxd/api':
         specifier: workspace:*
         version: link:../api

@@ -5,11 +5,11 @@ sections 0–91). Section refs like `§22` point back at the spec.
 
 **Spec read: complete (all 92 sections).**
 
-**Current state:** Phases 1 through 9 complete and verified. 365 tests passing,
+**Current state:** Phases 1 through 10 complete and verified (Tauri excepted —
+it is explicitly "eventually" in §67). 379 tests passing,
 three golden benchmarks green. All 15 MCP tools are live, and MCP has no
-execution primitive at all — asserted by a test and a CI gate. Next action:
-Phase 10 — optional local AI, embeddings and Tauri (§64–66), all of which must
-stay optional: everything works offline without them.
+execution primitive at all — asserted by a test and a CI gate. ctxd ships no
+model and calls no network; the AI interfaces exist so one could be added.
 
 > Environment note: this machine now runs Node 24.14.0 and every `ctxd doctor`
 > check passes. `better-sqlite3` was moved to `^12.2.0`, which is the first line
@@ -64,7 +64,7 @@ without losing correctness · 3) reduce unnecessary AI code changes.
 | 7 | Worker management + verification + Diff Firewall | ✅ done |
 | 8 | React UI + local API | ✅ done |
 | 9 | Optimization + benchmarks | ✅ done |
-| 10 | Optional local AI / embeddings / Tauri | 🔄 next |
+| 10 | Optional local AI / embeddings / Tauri | ✅ interfaces done · Tauri not started |
 
 ---
 
@@ -398,14 +398,14 @@ Engine also exposed as a **pure function** for tests.
 - [x] `ctxd stats`, `ctxd efficiency` reporting "estimated context avoided"
 
 ### Memory extraction + local AI (§64–66)
-- [ ] Deterministic extraction preferred; LLM extraction optional and never for
-      trivial facts. Preserve raw conversations, agent outputs, snapshots,
-      session/task history, receipts, original files.
-- [ ] Interfaces `Summarizer`, `MemoryExtractor`, `EmbeddingProvider`,
-      `Classifier`; optional Ollama/llama.cpp/Candle backends
-- [ ] Offline mode (§66): search, memory, Git, tasks, sessions, token counting,
-      context construction, diff analysis, verification, UI, CLI all work
-      without any AI provider
+- [x] Deterministic extraction preferred (`extractDeterministic`); LLM
+      extraction optional and gated by `worthConsultingProvider`. Extraction
+      reads only — nothing is destroyed.
+- [x] Interfaces `Summarizer`, `MemoryExtractor`, `EmbeddingProvider`,
+      `Classifier` in `@ctxd/ai`. No backend ships; a CI gate keeps the
+      package free of network primitives and non-ctxd dependencies.
+- [x] Offline mode (§66): all 11 capabilities work with no provider — asserted
+      by a capability table the test suite checks and `ctxd doctor` reports.
 
 ### Other
 - [x] Decisions (§45): `ctxd decision|decisions`, `add`, `for <path>`; surfaced

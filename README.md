@@ -262,7 +262,7 @@ task needs.
 | 7 · Verification + Diff Firewall | ✅ |
 | 8 · Local API + web UI | ✅ |
 | 9 · Optimisation + benchmarks | ✅ |
-| 10 · Optional local AI | 🚧 next |
+| 10 · Optional local AI | ✅ interfaces |
 
 Not built yet: the worker monitor and settings panels. Nothing in this
 repository calls a network service or an AI model.
@@ -283,6 +283,7 @@ APIs may change before 1.0.
 | [ui.md](docs/ui.md) | The interface, how it is served, and its dependencies |
 | [mcp.md](docs/mcp.md) | The MCP tool surface |
 | [benchmarks.md](docs/benchmarks.md) | Benchmark scenarios, results, performance targets |
+| [local-ai.md](docs/local-ai.md) | The optional-AI interfaces and the offline guarantee |
 | [development.md](docs/development.md) | Building, testing, conventions |
 | [plan.md](docs/plan.md) | The full specification |
 

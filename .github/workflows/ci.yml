@@ -105,7 +105,7 @@ jobs:
               packages/context/src packages/core/src packages/db/src \
               packages/memory/src packages/project/src packages/work/src \
               packages/firewall/src packages/diff/src packages/verify/src \
-              packages/stats/src; then
+              packages/stats/src packages/ai/src; then
             echo "::error::Found a network primitive in a local-first package."
             exit 1
           fi

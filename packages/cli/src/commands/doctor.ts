@@ -19,6 +19,7 @@ import {
 } from "@ctxd/db";
 import { formatCheck } from "@ctxd/utils";
 import { inspectGit } from "@ctxd/project";
+import { offlineReport } from "@ctxd/ai";
 
 /** Minimum Node major version required by the specification. */
 export const NODE_MINIMUM_MAJOR = 24;
@@ -196,6 +197,34 @@ function checkLogging(paths: CtxdPaths): Check {
   }
 }
 
+/**
+ * Offline capability (§66).
+ *
+ * Graceful degradation without AI is mandatory, so `doctor` states it rather
+ * than leaving it to a README. The check reads the capability table, which
+ * fails if a future change makes something depend on a model.
+ */
+function checkOffline(): Check {
+  const report = offlineReport();
+  if (!report.fullyOffline) {
+    const broken = report.capabilities.filter((capability) => !capability.worksOffline);
+    return {
+      name: "Offline",
+      ok: false,
+      detail: `${broken.length} capability(ies) require an AI provider`,
+      fix: "§66 requires every listed capability to work with no provider.",
+    };
+  }
+
+  return {
+    name: "Offline",
+    ok: true,
+    detail: report.providersConfigured
+      ? `all ${report.capabilities.length} capabilities work without AI (providers: ${report.providers.join(", ")})`
+      : `all ${report.capabilities.length} capabilities work without AI (no provider configured)`,
+  };
+}
+
 function checkGit(): Check {
   const git = inspectGit();
   if (!git.available) {
@@ -225,7 +254,7 @@ export function runDoctor(env: NodeJS.ProcessEnv = process.env): DoctorReport {
   const logging = checkLogging(paths);
   const git = checkGit();
 
-  const checks = [node, sqlite, fts5, dataDir, config, database, logging, git];
+  const checks = [node, sqlite, fts5, dataDir, config, database, logging, git, checkOffline()];
   return { checks, ok: checks.every((check) => check.ok) };
 }
 
