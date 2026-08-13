@@ -5,7 +5,7 @@
     "outDir": "./dist"
   },
   "include": ["src/**/*.ts"],
-  "references": [
+  "references": [{ "path": "../utils" }, 
     { "path": "../context" },
     { "path": "../core" },
     { "path": "../db" },

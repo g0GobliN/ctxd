@@ -16,6 +16,7 @@
     "@ctxd/firewall": "workspace:*",
     "@ctxd/memory": "workspace:*",
     "@ctxd/project": "workspace:*",
+    "@ctxd/utils": "workspace:*",
     "@ctxd/work": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.30.0"
   }

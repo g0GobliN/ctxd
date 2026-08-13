@@ -53,6 +53,19 @@ including that no partial content escapes.
 Logs pass every field through `redactSecrets()` before writing, so a credential
 collected by mistake upstream still cannot land in a log file.
 
+## A worker cannot leave the directory the server serves
+
+`ctxd mcp --dir <project>` fixes the boundary. Every tool accepts an optional
+`dir`, so a caller can name a package inside a monorepo, and it must resolve
+*inside* the served directory.
+
+That check was once missing, and its absence defeated every other path guard at
+once: confinement is enforced relative to the resolved root, so a worker that
+chose the root could read any file on the machine through `ctx_file_get` and
+report on any registered project through `ctx_status`. A refusal is returned as
+a tool error rather than thrown, and the guard wraps every handler — so a tool
+added later inherits it instead of opting in.
+
 ## No arbitrary execution through MCP (§63)
 
 A worker cannot make ctxd run a command. The MCP package contains no

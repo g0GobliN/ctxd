@@ -78,3 +78,19 @@ cannot quietly rewrite the rules it was given.
 - No tool executes shell commands. There is no arbitrary execution surface.
 - A throwing tool returns an error to the caller rather than dropping the
   connection.
+
+## Boundaries
+
+The server serves one directory, fixed by `--dir` at startup.
+
+Every tool takes an optional `dir` so a caller can name a package inside a
+monorepo. It must resolve inside the served directory; anything else is refused.
+Without that rule the parameter is a filesystem escape rather than a
+convenience, because every path guard downstream confines reads relative to the
+resolved root.
+
+A worker may record memory only as `worker_statement` or `inferred`. See
+[memory.md](memory.md).
+
+There is no tool that runs a command, and the package contains no
+process-spawning primitive at all — asserted by a test and a CI gate.

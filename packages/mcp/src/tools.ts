@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { isSubPath } from "@ctxd/utils";
 import { VERSION, type Config, type CtxdPaths } from "@ctxd/core";
 import { getSchemaVersion, type Db } from "@ctxd/db";
 import { formatReceipt } from "@ctxd/context";
@@ -79,9 +80,44 @@ interface ResolvedProject {
   readonly project: ProjectRow | undefined;
 }
 
+/** A worker named a directory outside the one this server was started for. */
+export class DirectoryEscapesServerError extends Error {
+  constructor(readonly requested: string) {
+    super(
+      `refusing to work in ${requested}: outside the directory this ctxd server serves`,
+    );
+    this.name = "DirectoryEscapesServerError";
+  }
+}
+
+/**
+ * Resolve the project a tool call refers to.
+ *
+ * `dir` exists so a caller can name a package inside a monorepo. It must stay
+ * *inside* the directory the server was started for.
+ *
+ * Without that check the parameter is a filesystem escape rather than a
+ * convenience: every path guard downstream confines reads relative to this
+ * root, so a worker that chooses the root has defeated all of them at once and
+ * can read any file on the machine.
+ */
 function resolveProject(ctx: ToolContext, args: Record<string, unknown>): ResolvedProject {
-  const dir = resolve(str(args, "dir") ?? ctx.cwd);
+  const requested = str(args, "dir");
+  const served = resolve(ctx.cwd);
+
+  if (requested === undefined) {
+    const detected = detectProject(served);
+    return { root: detected.root, project: findProjectByRoot(ctx.db, detected.root) };
+  }
+
+  const dir = resolve(requested);
+  if (!isSubPath(served, dir)) throw new DirectoryEscapesServerError(requested);
+
   const detected = detectProject(dir);
+  // Detection walks up to the repository root, which can itself sit above the
+  // served directory. The served directory is the boundary either way.
+  if (!isSubPath(served, detected.root)) throw new DirectoryEscapesServerError(requested);
+
   return { root: detected.root, project: findProjectByRoot(ctx.db, detected.root) };
 }
 
@@ -121,10 +157,32 @@ function refuseSource(source: string): ToolResult {
   );
 }
 
+/**
+ * Turn a refused directory into a tool error instead of a thrown exception.
+ *
+ * Wrapping every handler once is safer than remembering to catch in each: a
+ * new tool inherits the guard rather than opting into it.
+ */
+function withRefusals(tools: ToolDefinition[]): ToolDefinition[] {
+  return tools.map((tool) => ({
+    ...tool,
+    handler(args: Record<string, unknown>): ToolResult {
+      try {
+        return tool.handler(args);
+      } catch (error) {
+        if (error instanceof DirectoryEscapesServerError) return fail(error.message);
+        throw error;
+      }
+    },
+  }));
+}
+
 const DIR_PROPERTY = {
   dir: {
     type: "string",
-    description: "Project directory. Defaults to where the ctxd server was started.",
+    description:
+      "Project directory, which must be inside the directory this server was started for. " +
+      "Defaults to that directory.",
   },
 } as const;
 
@@ -139,7 +197,7 @@ const DIR_PROPERTY = {
  * believe the result, and act on nothing.
  */
 export function createTools(ctx: ToolContext): ToolDefinition[] {
-  return [
+  return withRefusals([
     {
       name: "ctx_status",
       description:
@@ -707,5 +765,5 @@ export function createTools(ctx: ToolContext): ToolDefinition[] {
         return { text: formatHandoff(handoff) };
       },
     },
-  ];
+  ]);
 }

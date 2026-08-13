@@ -185,3 +185,109 @@ describe("a worker cannot claim authority it did not earn (§31)", () => {
     }
   });
 });
+
+describe("a worker cannot leave the directory the server serves", () => {
+  /**
+   * Regression, and the most severe defect found in this codebase: every tool
+   * accepted a `dir` override, and every downstream path guard confines reads
+   * relative to *that* root. A worker choosing the root defeated all of them at
+   * once — `ctx_file_get` would read any file on the machine, and `ctx_status`
+   * would report on any registered project.
+   *
+   * `dir` still exists, because naming a package inside a monorepo is the
+   * reason it was added. It just cannot point outside the served directory.
+   */
+  function scenario() {
+    const home = createTempHome();
+    const served = join(home.dir, "served");
+    mkdirSync(join(served, "packages", "api", "src"), { recursive: true });
+    writeFileSync(join(served, "package.json"), JSON.stringify({ name: "served" }));
+    writeFileSync(join(served, "packages", "api", "src", "ok.ts"), "export const a = 1;\n");
+
+    const outside = join(home.dir, "unrelated");
+    mkdirSync(join(outside, "src"), { recursive: true });
+    writeFileSync(join(outside, "package.json"), JSON.stringify({ name: "unrelated" }));
+    writeFileSync(join(outside, "src", "secret.ts"), "export const TRADE_SECRET = 1;\n");
+
+    const db = openDatabase(join(home.dir, "served.db"));
+    migrate(db);
+    upsertProject(db, detectProject(served));
+
+    return {
+      db,
+      home,
+      served,
+      outside,
+      tools: createTools({
+        db,
+        paths: resolvePaths({ env: { CTXD_HOME: home.dir } }),
+        config: DEFAULT_CONFIG,
+        cwd: served,
+      }),
+    };
+  }
+
+  it("refuses to read a file in an unrelated directory", () => {
+    const { db, home, outside, tools } = scenario();
+    try {
+      const get = tools.find((tool) => tool.name === "ctx_file_get");
+      assert.ok(get);
+
+      const result = get.handler({ path: "src/secret.ts", dir: outside });
+      assert.equal(result.isError, true, "a worker read a file outside the served directory");
+      assert.match(result.text, /outside the directory this ctxd server serves/);
+      assert.ok(!result.text.includes("TRADE_SECRET"), "content leaked in the refusal");
+    } finally {
+      db.close();
+      home.cleanup();
+    }
+  });
+
+  it("refuses a directory reached by traversal", () => {
+    const { db, home, served, tools } = scenario();
+    try {
+      const get = tools.find((tool) => tool.name === "ctx_file_get");
+      assert.ok(get);
+
+      const result = get.handler({ path: "src/secret.ts", dir: join(served, "..", "unrelated") });
+      assert.equal(result.isError, true);
+    } finally {
+      db.close();
+      home.cleanup();
+    }
+  });
+
+  it("refuses on every tool, not only the file reader", () => {
+    const { db, home, outside, tools } = scenario();
+    try {
+      for (const name of ["ctx_status", "ctx_project_summary", "ctx_context_build"]) {
+        const tool = tools.find((entry) => entry.name === name);
+        assert.ok(tool, `missing ${name}`);
+
+        const result = tool.handler({ dir: outside, task: "anything" });
+        assert.equal(result.isError, true, `${name} accepted an outside directory`);
+      }
+    } finally {
+      db.close();
+      home.cleanup();
+    }
+  });
+
+  it("still serves a package inside the served directory", () => {
+    const { db, home, served, tools } = scenario();
+    try {
+      const get = tools.find((tool) => tool.name === "ctx_file_get");
+      assert.ok(get);
+
+      const nested = get.handler({ path: "src/ok.ts", dir: join(served, "packages", "api") });
+      assert.notEqual(nested.isError, true, nested.text);
+      assert.match(nested.text, /export const a = 1/);
+
+      const defaulted = get.handler({ path: "packages/api/src/ok.ts" });
+      assert.notEqual(defaulted.isError, true, defaulted.text);
+    } finally {
+      db.close();
+      home.cleanup();
+    }
+  });
+});
