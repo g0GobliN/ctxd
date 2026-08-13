@@ -1,0 +1,29 @@
+{
+  "name": "auth-migration",
+  "task": "Migrate session authentication to JWT access tokens",
+  "budget": 10000,
+  "minCandidateTokens": 50000,
+  "mustInclude": [
+    "src/auth/session-store.ts",
+    "src/auth/jwt.ts",
+    "docs/rules.md"
+  ],
+  "shouldInclude": [
+    "src/auth/middleware.ts",
+    "docs/auth-architecture.md",
+    ".ctxd/memory/decision-58-token-lifetime.md"
+  ],
+  "mustExclude": [
+    "src/inventory/inventory-module-1.ts",
+    "src/logistics/logistics-module-1.ts",
+    "src/reporting/reporting-module-1.ts",
+    "src/facilities/facilities-module-1.ts",
+    ".env"
+  ],
+  "mustDeduplicate": [
+    {
+      "keep": "docs/auth-architecture.md",
+      "drop": "docs/auth-architecture-copy.md"
+    }
+  ]
+}

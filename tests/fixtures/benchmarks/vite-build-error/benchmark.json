@@ -1,0 +1,22 @@
+{
+  "name": "vite-build-error",
+  "task": "Fix the Vite dev server HMR port collision breaking hot reload",
+  "budget": 10000,
+  "minCandidateTokens": 50000,
+  "mustInclude": [
+    "docs/rules.md",
+    ".ctxd/memory/vite-hmr-port-collision.md"
+  ],
+  "shouldInclude": [
+    "apps/web/vite.config.ts",
+    "docs/ports.md"
+  ],
+  "mustExclude": [
+    "src/billing/billing-module-1.ts",
+    "src/crm/crm-module-1.ts",
+    "src/scheduling/scheduling-module-1.ts",
+    "src/documents/documents-module-1.ts",
+    ".env"
+  ],
+  "mustDeduplicate": []
+}
