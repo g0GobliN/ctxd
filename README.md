@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="img/logo.png" alt="ctxd" width="64" />
+
 # ctxd
 
 **A context firewall for AI coding agents.**
@@ -14,6 +16,10 @@ Local-first engineering memory that gives Claude Code, Cursor and friends the
 </div>
 
 ---
+
+<p align="center">
+  <img src="img/overview.png" alt="ctxd context firewall — filter, rank, deduplicate, and compress project context for AI coding agents" width="900" />
+</p>
 
 ## The problem
 
