@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { existsSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { after, describe, it } from "node:test";
 import { DATA_SUBDIRECTORIES, ensureDataDir, isWritableDir, resolvePaths } from "@ctxd/core";
 import { expandTilde, isSubPath } from "@ctxd/utils";
@@ -14,8 +14,11 @@ describe("expandTilde", () => {
     assert.equal(expandTilde("~", "/home/example"), "/home/example");
   });
 
+  // Paths are compared against the platform's own resolver rather than a
+  // literal POSIX string: the same call yields C:\… on Windows, and hardcoding
+  // one separator would test the platform instead of the function.
   it("expands a tilde prefix", () => {
-    assert.equal(expandTilde("~/.ctxd", "/home/example"), "/home/example/.ctxd");
+    assert.equal(expandTilde("~/.ctxd", "/home/example"), resolve("/home/example", ".ctxd"));
   });
 
   it("leaves absolute and relative paths alone", () => {
@@ -43,14 +46,15 @@ describe("isSubPath", () => {
 describe("resolvePaths", () => {
   it("defaults to ~/.ctxd", () => {
     const paths = resolvePaths({ env: {}, home: "/home/example" });
-    assert.equal(paths.dataDir, "/home/example/.ctxd");
-    assert.equal(paths.configFile, "/home/example/.ctxd/config.json");
-    assert.equal(paths.dbFile, "/home/example/.ctxd/ctxd.db");
+    const expected = resolve("/home/example", ".ctxd");
+    assert.equal(paths.dataDir, expected);
+    assert.equal(paths.configFile, join(expected, "config.json"));
+    assert.equal(paths.dbFile, join(expected, "ctxd.db"));
   });
 
   it("honours a configured directory", () => {
     const paths = resolvePaths({ directory: "~/custom", env: {}, home: "/home/example" });
-    assert.equal(paths.dataDir, "/home/example/custom");
+    assert.equal(paths.dataDir, resolve("/home/example", "custom"));
   });
 
   it("lets CTXD_HOME override configuration", () => {
@@ -59,13 +63,14 @@ describe("resolvePaths", () => {
       env: { CTXD_HOME: "/tmp/override" },
       home: "/home/example",
     });
-    assert.equal(paths.dataDir, "/tmp/override");
+    assert.equal(paths.dataDir, resolve("/tmp/override"));
   });
 
   it("places every receipt directory inside the data directory", () => {
     const paths = resolvePaths({ env: { CTXD_HOME: "/tmp/x" } });
-    assert.equal(paths.contextReceiptsDir, "/tmp/x/context_receipts");
-    assert.equal(paths.changeReceiptsDir, "/tmp/x/change_receipts");
+    assert.equal(paths.contextReceiptsDir, join(paths.dataDir, "context_receipts"));
+    assert.equal(paths.changeReceiptsDir, join(paths.dataDir, "change_receipts"));
+    assert.equal(paths.dataDir, resolve("/tmp/x"));
   });
 });
 
