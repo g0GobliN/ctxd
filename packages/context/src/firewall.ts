@@ -13,6 +13,11 @@ export interface BuildContextOptions {
   readonly budget: number;
   readonly project?: string;
   /**
+   * Who asked, if they said so. Recorded on the receipt as a claim (§6), which
+   * is what makes per-worker context accounting possible at all.
+   */
+  readonly claimedWorker?: string | undefined;
+  /**
    * Candidates from sources other than the filesystem — memory, Git state,
    * task state. They join the same dedup, ranking and budget pipeline as
    * files, so nothing bypasses the firewall by virtue of where it came from.
@@ -82,6 +87,7 @@ export function buildContext(options: BuildContextOptions): BuildContextResult {
   const receipt = buildReceipt({
     project: options.project ?? options.dir,
     task: options.task,
+    ...(options.claimedWorker === undefined ? {} : { claimedWorker: options.claimedWorker }),
     candidateTokens,
     duplicates: dedup.duplicates,
     duplicateTokens: dedup.removedTokens,

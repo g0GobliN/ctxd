@@ -21,6 +21,8 @@ export interface BuildProjectContextOptions {
   readonly now?: number;
   readonly requestId?: string;
   readonly timestamp?: string;
+  /** Self-declared requester, recorded on the receipt as a claim (§6). */
+  readonly claimedWorker?: string | undefined;
   /** Record that retrieved memories were used. Off in tests for determinism. */
   readonly touchMemories?: boolean;
 }
@@ -93,6 +95,7 @@ export function buildProjectContext(
     budget: options.budget,
     project: project?.name ?? detected.name,
     extraCandidates,
+    ...(options.claimedWorker === undefined ? {} : { claimedWorker: options.claimedWorker }),
     ...(options.weights === undefined ? {} : { weights: options.weights }),
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.requestId === undefined ? {} : { requestId: options.requestId }),

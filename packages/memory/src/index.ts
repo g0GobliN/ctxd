@@ -23,7 +23,9 @@ export {
 export {
   archiveMemory,
   getMemory,
+  countMemories,
   listMemories,
+  type MemoryCounts,
   memoryHash,
   saveMemory,
   touchMemory,

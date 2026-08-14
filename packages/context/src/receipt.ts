@@ -34,6 +34,17 @@ export interface ContextReceipt {
   readonly timestamp: string;
   readonly project: string;
   readonly task: string;
+  /**
+   * Who asked, if they said.
+   *
+   * Optional in the type because receipts are files on disk and every receipt
+   * written before this field existed will never have it. Absent means UNKNOWN,
+   * which is the honest reading — not "nobody" and not a guess (§37).
+   *
+   * The value is self-declared, exactly as it is on the event log: ctxd sees a
+   * request, not an identity (§6). It attributes; it does not vouch.
+   */
+  readonly claimed_worker?: string;
   readonly budget: number;
   readonly candidate_total_tokens: number;
   readonly final_total_tokens: number;
@@ -50,6 +61,8 @@ export interface ContextReceipt {
 export interface BuildReceiptInput {
   readonly project: string;
   readonly task: string;
+  /** Self-declared requester. Omitted rather than defaulted when unknown. */
+  readonly claimedWorker?: string | undefined;
   readonly candidateTokens: number;
   readonly duplicates: readonly DuplicateRecord[];
   readonly duplicateTokens: number;
@@ -79,6 +92,9 @@ export function buildReceipt(input: BuildReceiptInput): ContextReceipt {
     timestamp: input.timestamp ?? new Date().toISOString(),
     project: input.project,
     task: input.task,
+    // Omitted entirely when unknown, so a reader cannot mistake an explicit
+    // null for a worker that named itself null.
+    ...(input.claimedWorker === undefined ? {} : { claimed_worker: input.claimedWorker }),
     budget: selection.budget,
     candidate_total_tokens: input.candidateTokens,
     final_total_tokens: selection.finalTokens,
@@ -118,6 +134,10 @@ export function formatReceipt(receipt: ContextReceipt): string {
     "",
     `Task:      ${receipt.task}`,
     `Project:   ${receipt.project}`,
+    // "claims" rather than a bare name: the receipt records who said they
+    // asked, and a receipt that laundered that into fact would be lying in the
+    // one document whose whole purpose is to be trustworthy.
+    `Worker:    ${receipt.claimed_worker === undefined ? "unknown" : `claims ${receipt.claimed_worker}`}`,
     `Budget:    ${receipt.budget.toLocaleString()}`,
     "",
     `Candidate: ${receipt.candidate_total_tokens.toLocaleString()} ${receipt.token_count_estimation} tokens`,

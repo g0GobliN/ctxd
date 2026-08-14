@@ -235,6 +235,41 @@ export function listMemories(
   return rows.map(toMemory);
 }
 
+export interface MemoryCounts {
+  readonly total: number;
+  /** Live memories by type. Types with none are absent rather than zero. */
+  readonly byType: Readonly<Record<string, number>>;
+}
+
+/**
+ * How much this project actually remembers.
+ *
+ * Counted in SQLite rather than by measuring a listing: every listing is capped,
+ * so counting one would report the cap as the total once a project outgrew it —
+ * a number that looks precise and stops being true exactly when it matters.
+ *
+ * Archived memories are excluded. They were superseded, and reporting them as
+ * things ctxd knows would overstate what it would actually retrieve.
+ */
+export function countMemories(db: Db, projectId: string): MemoryCounts {
+  const rows = db
+    .prepare(
+      `SELECT type, COUNT(*) AS n FROM memories
+       WHERE project_id = ? AND status != 'archived'
+       GROUP BY type`,
+    )
+    .all(projectId) as { type: string; n: number }[];
+
+  const byType: Record<string, number> = {};
+  let total = 0;
+  for (const row of rows) {
+    byType[row.type] = row.n;
+    total += row.n;
+  }
+
+  return { total, byType };
+}
+
 /** Record that a memory was used, which later phases rank on. */
 export function touchMemory(db: Db, id: string, now = new Date()): void {
   db.prepare("UPDATE memories SET last_accessed_at = ? WHERE id = ?").run(now.toISOString(), id);
