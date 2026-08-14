@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
 import { migrate, openDatabase } from "@ctxd/db";
@@ -130,6 +130,36 @@ describe("project persistence", () => {
     db.close();
   });
 
+  it("finds a project whose root is spelled with forward slashes", () => {
+    // The bug this pins: `ctxd status` looks a project up by the Git root, and
+    // Git reports that with forward slashes even on Windows, while the stored
+    // root is native. An exact string match therefore reported every
+    // registered Windows project as "not registered".
+    const db = freshDb("separators");
+    const project = detectProject(
+      makeProject("slashes", { "package.json": JSON.stringify({ name: "slashes-app" }) }),
+    );
+    upsertProject(db, project);
+
+    const asGitReportsIt = project.root.replace(/\\/g, "/");
+    assert.equal(findProjectByRoot(db, asGitReportsIt)?.id, project.id);
+
+    // A trailing separator is the same directory too.
+    assert.equal(findProjectByRoot(db, `${asGitReportsIt}/`)?.id, project.id);
+    db.close();
+  });
+
+  it("does not match a different directory that merely shares a prefix", () => {
+    const db = freshDb("prefix");
+    const project = detectProject(
+      makeProject("app", { "package.json": JSON.stringify({ name: "app" }) }),
+    );
+    upsertProject(db, project);
+
+    assert.equal(findProjectByRoot(db, `${project.root}-other`), undefined);
+    db.close();
+  });
+
   it("refreshes rather than duplicating on re-init, keeping created_at", () => {
     const db = freshDb("refresh");
     const root = makeProject("refreshed", {
@@ -246,6 +276,34 @@ describe("indexProjectFiles", () => {
 });
 
 describe("writeProjectStorage", () => {
+  it("generates MCP configuration that actually parses as JSON", () => {
+    // The bug this pins: the Windows root was interpolated raw, so the snippet
+    // read "C:\Users\..." — and `\U` is not a valid JSON escape. Anyone who
+    // copied it into Cursor got a parse error, from a file whose whole purpose
+    // is to be copied.
+    const root = makeProject("mcp-config", {
+      "package.json": JSON.stringify({ name: "mcp-config-app" }),
+    });
+    const projectsDir = join(home.dir, "projects-mcp");
+    mkdirSync(projectsDir, { recursive: true });
+
+    writeProjectStorage(projectsDir, detectProject(root));
+
+    const setup = readFileSync(
+      join(projectsDir, detectProject(root).id, "mcp-setup.md"),
+      "utf8",
+    );
+
+    const json = setup.match(/```json\n([\s\S]*?)```/)?.[1];
+    assert.ok(json !== undefined, "the setup document must contain a JSON block");
+
+    const parsed = JSON.parse(json) as {
+      mcpServers: { ctxd: { args: string[] } };
+    };
+    // The path survives the round trip, rather than merely parsing.
+    assert.ok(parsed.mcpServers.ctxd.args.includes(root));
+  });
+
   it("writes generated documents into the project directory", () => {
     const root = makeProject("documented", {
       "package.json": JSON.stringify({ name: "documented-app" }),

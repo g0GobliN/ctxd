@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { collectCandidates, type CollectOptions } from "@ctxd/context";
 import type { Db } from "@ctxd/db";
 import type { DetectedProject } from "./detect.js";
@@ -90,8 +91,35 @@ export function getProject(db: Db, id: string): ProjectRow | undefined {
   return db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow | undefined;
 }
 
+/**
+ * Find a project by the directory it lives in.
+ *
+ * The lookup normalises separators before comparing, because callers do not all
+ * arrive with the same spelling of the same path. Git reports its root with
+ * forward slashes even on Windows, while `detectProject` stores the native
+ * form — so `ctxd status`, which looks up by the Git root, reported a
+ * registered project as "not registered" on every Windows repository.
+ *
+ * Comparing resolved paths rather than raw strings is the fix, and it belongs
+ * here rather than in each caller: a path equality rule copied into three
+ * places is a rule that will disagree with itself.
+ *
+ * Case is deliberately left alone. Windows paths are case-insensitive and POSIX
+ * paths are not, and lower-casing here would make two genuinely different
+ * directories on Linux look like one project.
+ */
 export function findProjectByRoot(db: Db, root: string): ProjectRow | undefined {
-  return db.prepare("SELECT * FROM projects WHERE root = ?").get(root) as ProjectRow | undefined;
+  const wanted = resolve(root);
+
+  const exact = db.prepare("SELECT * FROM projects WHERE root = ?").get(wanted) as
+    | ProjectRow
+    | undefined;
+  if (exact !== undefined) return exact;
+
+  // Rows written before this normalisation existed, or by a caller that stored
+  // a differently-spelled path. Scanning is acceptable: a developer has a
+  // handful of projects, not a table worth indexing around.
+  return listProjects(db).find((project) => resolve(project.root) === wanted);
 }
 
 export function listProjects(db: Db): ProjectRow[] {

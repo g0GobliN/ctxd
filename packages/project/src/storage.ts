@@ -165,7 +165,7 @@ same code as the CLI — there is no second implementation to drift.
 ## Claude Code
 
 \`\`\`bash
-claude mcp add ctxd -- ctxd mcp --dir ${project.root}
+claude mcp add ctxd -- ctxd mcp --dir "${project.root}"
 \`\`\`
 
 ## Cursor, and other MCP clients
@@ -177,7 +177,7 @@ Add to the client's MCP configuration:
   "mcpServers": {
     "ctxd": {
       "command": "ctxd",
-      "args": ["mcp", "--dir", "${project.root}"]
+      "args": ["mcp", "--dir", ${JSON.stringify(project.root)}]
     }
   }
 }
