@@ -43,3 +43,10 @@ export {
   type CreateCheckpointInput,
   type Handoff,
 } from "./checkpoints.js";
+
+export {
+  formatTransfer,
+  transferTask,
+  type TransferInput,
+  type TransferResult,
+} from "./transfer.js";
