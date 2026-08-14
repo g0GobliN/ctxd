@@ -21,7 +21,7 @@ working unless it is.
 | 9 | Optimisation + benchmarks | ✅ |
 | 10 | Optional local AI interfaces + offline guarantee | ✅ interfaces |
 
-617 tests. Seven context benchmarks and three change benchmarks. CLI startup
+616 tests. Seven context benchmarks and three change benchmarks. CLI startup
 ~180ms; FTS5 search and memory lookup ~1ms over 500 memories.
 
 ## 2.0 — in progress

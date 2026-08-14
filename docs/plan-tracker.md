@@ -9,7 +9,7 @@ sections 0–91). Section refs like `§22` point back at the spec.
 excepted, explicitly "eventually" in §67). 2.0 is under way: UI-0 through UI-9, UI-11
 and UI-12 are done. UI-10 (Tauri) is written but has never compiled on this
 machine — see its entry; it is the one thing not verified. Its phases are
-tracked at the end of this file. **617 tests passing, 0 failing**, seven context
+tracked at the end of this file. **616 tests passing, 0 failing**, seven context
 benchmarks and three change benchmarks green. All 15 MCP tools are live, and MCP has no
 execution primitive at all — asserted by a test and a CI gate. ctxd ships no
 model and calls no network; the AI interfaces exist so one could be added.
