@@ -1,8 +1,15 @@
 name: Release
 
+# Manual only, deliberately.
+#
+# npm requires a second factor to publish, and this account has no automation
+# token stored — so a tag-triggered publish would fail at the last step every
+# time, putting a red cross beside a release whose installers built perfectly.
+# Tags build installers (see desktop.yml); packages are published on purpose.
+#
+# To go back to publishing on a tag: add an npm automation token as the
+# NPM_TOKEN secret and restore `push: tags: ["v*"]` here.
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -52,25 +59,36 @@ jobs:
           ls packages/ui/dist/assets/*.js >/dev/null
           echo "interface bundle present"
 
-      # Confirms the tag matches what would actually be published, so a
-      # mistyped tag fails here instead of publishing the wrong version.
-      - name: Check the tag matches the package version
-        if: startsWith(github.ref, 'refs/tags/v')
+      # Every package must carry the same version. A partial bump publishes a
+      # set that cannot be installed together, and npm will not let it be
+      # taken back.
+      - name: Check every package agrees on the version
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME#v}"
-          pkg="$(node -p "require('./packages/cli/package.json').version")"
-          if [ "$tag" != "$pkg" ]; then
-            echo "::error::tag v$tag does not match @ctxd/cli@$pkg"
+          versions="$(node -e "
+            const {readdirSync,readFileSync,existsSync}=require('fs');
+            const seen=new Set();
+            for (const dir of readdirSync('packages')) {
+              const path='packages/'+dir+'/package.json';
+              if (!existsSync(path)) continue;
+              seen.add(JSON.parse(readFileSync(path,'utf8')).version);
+            }
+            console.log([...seen].join(' '));
+          ")"
+          if [ "$(echo "$versions" | wc -w)" -ne 1 ]; then
+            echo "::error::packages disagree on the version: $versions"
             exit 1
           fi
-          echo "tag v$tag matches @ctxd/cli@$pkg"
+          echo "every package is at $versions"
 
       - name: Pack every package (dry run)
         run: pnpm -r --filter "!ctxd-workspace" exec npm pack --dry-run
 
+      # Only when explicitly asked for. `dry_run` defaults to true so the
+      # careless path is the safe one: a publish claims version numbers that
+      # cannot be taken back.
       - name: Publish
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: inputs.dry_run == false
         run: pnpm publish -r --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
