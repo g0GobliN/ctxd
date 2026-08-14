@@ -9,6 +9,7 @@
     { "path": "../context" },
     { "path": "../core" },
     { "path": "../db" },
+    { "path": "../events" },
     { "path": "../firewall" },
     { "path": "../memory" },
     { "path": "../project" },

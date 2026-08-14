@@ -4,7 +4,11 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { resolve } from "node:path";
 import { VERSION } from "@ctxd/core";
+import { detectProject, findProjectByRoot } from "@ctxd/project";
+import { DEFAULT_RETENTION_DAYS, pruneEvents } from "@ctxd/events";
+import { createEmitter } from "./events.js";
 import { createTools, type ToolContext, type ToolDefinition } from "./tools.js";
 
 export const SERVER_NAME = "ctxd";
@@ -19,6 +23,11 @@ export const SERVER_NAME = "ctxd";
 export function createServer(ctx: ToolContext): { server: Server; tools: ToolDefinition[] } {
   const tools = createTools(ctx);
   const byName = new Map(tools.map((tool) => [tool.name, tool]));
+
+  // Resolved once: every tool call would otherwise re-detect the project just
+  // to record that it happened, which is more work than the work.
+  const detected = detectProject(resolve(ctx.cwd));
+  const events = createEmitter(ctx.db, findProjectByRoot(ctx.db, detected.root)?.id, ctx.worker);
 
   const server = new Server(
     { name: SERVER_NAME, version: VERSION },
@@ -42,8 +51,15 @@ export function createServer(ctx: ToolContext): { server: Server; tools: ToolDef
       };
     }
 
+    // The tool name only. Arguments can carry a task description, a search
+    // query or a path, and the event stream is readable by every local process.
+    events.emit("worker_request_started", { data: { tool: tool.name } });
+
     try {
       const result = tool.handler((request.params.arguments ?? {}) as Record<string, unknown>);
+      events.emit(result.isError === true ? "worker_error" : "worker_request_finished", {
+        data: { tool: tool.name },
+      });
       return {
         content: [{ type: "text" as const, text: result.text }],
         ...(result.isError === true ? { isError: true } : {}),
@@ -51,6 +67,7 @@ export function createServer(ctx: ToolContext): { server: Server; tools: ToolDef
     } catch (error) {
       // A failing tool must not take down the server: the worker gets an error
       // it can act on instead of a dropped connection.
+      events.emit("worker_error", { data: { tool: tool.name } });
       return {
         content: [{ type: "text" as const, text: `ctxd: ${(error as Error).message}` }],
         isError: true,
@@ -70,9 +87,31 @@ export function createServer(ctx: ToolContext): { server: Server; tools: ToolDef
  */
 export async function runStdioServer(ctx: ToolContext): Promise<void> {
   const { server } = createServer(ctx);
+
+  // The two connection facts this process can actually observe: a client
+  // attached, and later it left (§6). Which client it is remains whatever the
+  // developer configured — a claim, recorded as one.
+  const detected = detectProject(resolve(ctx.cwd));
+  const project = findProjectByRoot(ctx.db, detected.root);
+  const events = createEmitter(ctx.db, project?.id, ctx.worker);
+
+  // Once per session, at the one moment nothing is waiting on it. The log gains
+  // rows with every tool call, and sessions, checkpoints and receipts are the
+  // durable record of anything this old.
+  try {
+    const cutoff = new Date(Date.now() - DEFAULT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    pruneEvents(ctx.db, cutoff);
+  } catch {
+    // Housekeeping. It must never stop the server from starting.
+  }
+
   await server.connect(new StdioServerTransport());
+  events.emit("worker_connected", { data: { transport: "stdio", version: VERSION } });
 
   await new Promise<void>((resolve) => {
-    server.onclose = () => resolve();
+    server.onclose = () => {
+      events.emit("worker_disconnected", { data: { transport: "stdio" } });
+      resolve();
+    };
   });
 }

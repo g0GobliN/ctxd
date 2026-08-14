@@ -23,15 +23,18 @@ import {
   type MemoryType,
 } from "@ctxd/memory";
 import { detectProject, findProjectByRoot, type ProjectRow } from "@ctxd/project";
+import { createEmitter } from "./events.js";
 import {
   buildHandoff,
   createCheckpoint,
   formatCheckpoint,
   formatHandoff,
+  formatTransfer,
   getTask,
   isTaskStatus,
   listTasks,
   subtasks,
+  transferTask,
   updateTask,
   type TaskStatus,
 } from "@ctxd/work";
@@ -42,6 +45,14 @@ export interface ToolContext {
   readonly config: Config;
   /** Directory the server was started in; the default project for every tool. */
   readonly cwd: string;
+  /**
+   * Which worker this server was configured to serve, if the developer said.
+   *
+   * A claim, never a check: the transport shows that a client attached, not
+   * what it is (§6). Absent, activity is recorded with no worker rather than
+   * with a guessed one.
+   */
+  readonly worker?: string | undefined;
 }
 
 export interface ToolResult {
@@ -281,14 +292,37 @@ export function createTools(ctx: ToolContext): ToolDefinition[] {
         const task = str(args, "task");
         if (task === undefined) return fail("task is required");
 
-        const { root } = resolveProject(ctx, args);
+        const { root, project } = resolveProject(ctx, args);
+        const budget = num(args, "budget") ?? 10000;
+        const events = createEmitter(ctx.db, project?.id, ctx.worker);
+
+        events.emit("context_requested", { data: { task, budget } });
+
         const result = buildProjectContext({
           task,
           dir: root,
-          budget: num(args, "budget") ?? 10000,
+          budget,
           db: ctx.db,
           config: ctx.config,
           touchMemories: true,
+          // Whatever `ctxd mcp --worker` was configured with. Absent, the
+          // receipt records no worker rather than guessing one.
+          claimedWorker: ctx.worker,
+        });
+
+        // Counts and the receipt id only. The context itself never travels on
+        // the event stream: every local process can read that stream, and the
+        // assembled context is the one thing here worth exfiltrating.
+        events.emit("context_built", {
+          data: {
+            task,
+            requestId: result.receipt.request_id,
+            candidateTokens: result.receipt.candidate_total_tokens,
+            finalTokens: result.receipt.final_total_tokens,
+            includedItems: result.receipt.included_items.length,
+            excludedItems: result.receipt.excluded_items.length,
+            tokenCounting: result.receipt.token_count_estimation,
+          },
         });
 
         const receipt = formatReceipt(result.receipt);
@@ -746,23 +780,65 @@ export function createTools(ctx: ToolContext): ToolDefinition[] {
     {
       name: "ctx_handoff",
       description:
-        "Assemble everything another worker needs to continue: task, progress, binding constraints, decisions, known bugs and Git state.",
+        "Assemble everything another worker needs to continue: task, progress, binding constraints, decisions, known bugs and Git state. " +
+        "Pass accept=true to actually hand the work over — that writes a checkpoint and reassigns the task, so the handover survives this session ending.",
       inputSchema: {
         type: "object",
-        properties: { to: { type: "string" }, ...DIR_PROPERTY },
+        properties: {
+          to: { type: "string" },
+          accept: {
+            type: "boolean",
+            description:
+              "Record the handover rather than only describing it. Requires 'to'.",
+          },
+          summary: { type: "string", description: "A note recorded with the checkpoint." },
+          ...DIR_PROPERTY,
+        },
       },
       handler(args) {
         const resolved = requireProject(ctx, args);
         if ("text" in resolved) return resolved;
         const { project, root } = resolved as ResolvedProject & { project: ProjectRow };
 
-        const handoff = buildHandoff(ctx.db, {
+        const to = str(args, "to");
+        const accept = args["accept"] === true;
+
+        if (!accept) {
+          const handoff = buildHandoff(ctx.db, {
+            projectId: project.id,
+            root,
+            ...(to === undefined ? {} : { recommendedWorker: to }),
+          });
+          return { text: formatHandoff(handoff) };
+        }
+
+        if (to === undefined || to.trim() === "") {
+          return { text: "ctx_handoff: accept=true needs 'to' — name the worker to hand to." };
+        }
+
+        const result = transferTask(ctx.db, {
           projectId: project.id,
           root,
-          ...(str(args, "to") === undefined ? {} : { recommendedWorker: str(args, "to") as string }),
+          toWorker: to,
+          // The outgoing side is whatever this server was configured to serve.
+          // Absent, the transfer records an unknown sender rather than guessing
+          // — a worker cannot establish its own identity (§6).
+          ...(ctx.worker === undefined ? {} : { fromWorker: ctx.worker }),
+          ...(str(args, "summary") === undefined ? {} : { note: str(args, "summary") }),
         });
 
-        return { text: formatHandoff(handoff) };
+        const events = createEmitter(ctx.db, project.id, ctx.worker);
+        events.emit("handoff_created", {
+          data: {
+            fromWorker: result.fromWorker,
+            toWorker: result.toWorker,
+            taskId: result.task?.id ?? null,
+            checkpointId: result.checkpoint.id,
+            warnings: result.warnings.length,
+          },
+        });
+
+        return { text: `${formatTransfer(result)}${formatHandoff(result.handoff)}` };
       },
     },
   ]);
