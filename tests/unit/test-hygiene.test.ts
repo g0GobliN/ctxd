@@ -85,12 +85,26 @@ describe("tests never touch the developer's storage (§77)", () => {
   it("runs the CLI only with an isolated CTXD_HOME", () => {
     for (const file of files) {
       const source = code(file);
-      // A subprocess inherits the environment, so spawning the CLI without an
+      // A subprocess inherits the environment, so starting the CLI without an
       // override would write to the real storage directory.
-      if (!/execFileSync\([^)]*CLI/s.test(source)) continue;
+      //
+      // Every way a test can start a child process has to be covered, not just
+      // the one that happened to be in use when this rule was written: a guard
+      // that misses `spawn` is a guard that stops working the first time
+      // someone needs a long-running child. This list grew by exactly that
+      // route — `tests/e2e/desktop.test.ts` spawns `ctxd desktop --no-window`.
+      const starts = [
+        /execFileSync\([^)]*CLI/s,
+        /execFile\([^)]*CLI/s,
+        /\bspawn\(([^)]*)CLI/s,
+        /spawnSync\([^)]*CLI/s,
+        /\bfork\([^)]*CLI/s,
+      ];
+      if (!starts.some((pattern) => pattern.test(source))) continue;
+
       assert.ok(
         source.includes("CTXD_HOME") || source.includes('"--version"'),
-        `${file} spawns the CLI without an isolated CTXD_HOME`,
+        `${file} starts the CLI without an isolated CTXD_HOME`,
       );
     }
   });

@@ -1,0 +1,20 @@
+[package]
+name = "ctxd-desktop"
+version = "0.1.0"
+edition = "2021"
+description = "Desktop shell for the ctxd local interface"
+publish = false
+
+# The shell is packaging and nothing else (§67, UI-10). No ctxd logic lives
+# here: it opens a window onto the local API, which is the same interface a
+# browser gets. Anything this crate decided for itself would be a second
+# implementation of a decision the core already makes.
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[profile.release]
+strip = true

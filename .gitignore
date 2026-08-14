@@ -11,3 +11,8 @@ dist/
 
 # Built interface bundle
 packages/ui/dist/
+
+# Rust build artefacts for the desktop shell. Cargo.lock is committed: the
+# shell is a binary, and a binary that resolves different dependency versions
+# per machine is a binary nobody can reproduce.
+packages/desktop/target/
