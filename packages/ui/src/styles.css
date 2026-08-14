@@ -231,6 +231,11 @@ h2 {
 
 .tag.ok { color: var(--ok); background: var(--accent-soft); border-color: transparent; }
 .tag.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+
+/* An over-edit warning in a listing. Carries the ⚠ glyph as well as the colour,
+   so it survives a monochrome screen — this is the line a reviewer is meant to
+   stop on. */
+.reason.warn { color: var(--warn); }
 .tag.danger { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
 
 .included { border-left: 3px solid var(--ok); }
@@ -274,6 +279,16 @@ input:focus-visible, button:focus-visible {
 }
 
 .button:hover { background: var(--surface-2); }
+
+/* The selected reporting window. Bordered as well as filled, so which window
+   is showing survives a monochrome screen — the figures below mean different
+   things per window, and reading the wrong one is a real error. */
+.button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
+  font-weight: 600;
+}
 
 .toolbar {
   display: flex;
@@ -328,6 +343,169 @@ pre {
   font-size: 12px;
   color: var(--muted);
   margin-top: 6px;
+}
+
+/* The engineering graph. Restrained on purpose (§18): this is a systems
+   diagram a developer reads, not something that should move while they do. */
+.graph {
+  width: 100%;
+  height: auto;
+  max-height: 68vh;
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin-bottom: 12px;
+}
+
+.gnode rect {
+  fill: var(--surface-2);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+/* Interaction (UI-9). The background grabs, the nodes move: the cursor says
+   which is which before the developer commits to a gesture. `touch-action:
+   none` is what stops a touch drag from scrolling the page instead of panning
+   the graph. */
+.graph { cursor: grab; touch-action: none; }
+.graph.panning { cursor: grabbing; }
+
+.gnode { cursor: move; }
+.gnode:focus { outline: none; }
+.gnode:hover rect { stroke: var(--accent); }
+.gnode.selected rect { stroke: var(--accent); stroke-width: 2; fill: var(--accent-soft); }
+
+.gnode-title {
+  fill: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.gnode-line {
+  fill: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.gnode-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-anchor: end;
+  fill: var(--muted);
+}
+
+.gnode-badge.ok { fill: var(--ok); }
+.gnode-badge.warn { fill: var(--warn); }
+.gnode-badge.danger { fill: var(--danger); }
+
+.gedge line {
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+
+/* Never colour alone: an unestablished connection is dashed as well as pale,
+   so the distinction survives a monochrome screen and colour blindness. */
+.gedge.idle line { stroke-dasharray: 4 4; }
+
+.gedge marker path,
+.graph marker path { fill: var(--border); }
+
+/* Live pulse (UI-4).
+ *
+ * An element is lit because a producer wrote an event, never because time
+ * passed — so the graph is still when the system is still, and movement means
+ * something happened. The pulse is a stroke as well as a colour, and the node
+ * also says "active now" in its label, because a state carried by animation
+ * alone is a state some readers never receive. */
+.gnode.live rect {
+  stroke: var(--accent);
+  stroke-width: 2;
+  animation: ctxd-pulse 1.1s ease-out 2;
+}
+
+.gedge.live line {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  animation: ctxd-pulse 1.1s ease-out 2;
+}
+
+@keyframes ctxd-pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.35; }
+  100% { opacity: 1; }
+}
+
+/* Honour the system setting: the information is in the colour and the label,
+   so removing the motion costs nothing. */
+@media (prefers-reduced-motion: reduce) {
+  .gnode.live rect,
+  .gedge.live line { animation: none; }
+}
+
+.gedge-label {
+  fill: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-anchor: middle;
+}
+
+/* Activity stream. A log, so it reads as one: monospaced time, dense rows,
+   newest at the top, and no animation on arrival — this is a panel a developer
+   watches while working, not something that should pull the eye. */
+.activity {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.activity li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.activity li:last-child { border-bottom: 0; }
+.activity li.ok .activity-label { color: var(--ok); }
+.activity li.warn .activity-label { color: var(--warn); }
+.activity li.danger .activity-label { color: var(--danger); }
+
+.activity-time {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.activity-label { font-weight: 500; }
+
+/* Visually marked as a claim, not only worded as one. */
+.activity-worker {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.activity-detail {
+  color: var(--muted);
+  font-size: 12px;
+  margin-left: auto;
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  .activity-detail { margin-left: 0; text-align: left; width: 100%; }
 }
 
 @media (max-width: 720px) {

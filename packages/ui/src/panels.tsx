@@ -8,21 +8,24 @@
  */
 
 import { useState, type ReactNode } from "react";
-import { api, type ChangeReceipt, type ContextReceipt } from "./api.js";
+import {
+  api,
+  type ChangeReceipt,
+  type ContextReceipt,
+  type WorkerConnection,
+} from "./api.js";
 import { formatTime, Panel, Stat, useApi, verdictTone } from "./common.js";
 
 /* Dashboard ---------------------------------------------------------------- */
 
 export function Dashboard(): ReactNode {
   const status = useApi(() => api.status());
-  const changes = useApi(() => api.changeReceipts());
-  const contexts = useApi(() => api.contextReceipts());
-
-  const contextReceipts = contexts.data?.receipts ?? [];
-  const avoided = contextReceipts.reduce(
-    (total, receipt) => total + (receipt.candidate_total_tokens - receipt.final_total_tokens),
-    0,
-  );
+  // The totals come from `/api/stats`, which is `@ctxd/stats` — the same code
+  // `ctxd stats` runs. This panel used to sum the receipt listing itself, which
+  // made the browser a second place the figure was computed and so a second
+  // place it could be wrong; worse, the listing is capped, so the total quietly
+  // stopped being a total once a project outgrew the cap (UI-7).
+  const stats = useApi(() => api.stats("all"));
 
   return (
     <>
@@ -36,16 +39,16 @@ export function Dashboard(): ReactNode {
           <Stat label="Projects" value={status.data?.projects ?? 0} />
           <Stat
             label="Context builds"
-            value={contextReceipts.length}
+            value={stats.data?.context.requests ?? "…"}
             note="receipts on disk"
           />
           <Stat
             label="Context avoided"
-            value={avoided}
+            value={stats.data?.context.avoidedTokens ?? "…"}
             // §18/§49: never a dollar figure, always labelled an estimate.
-            note="estimated tokens, all receipts"
+            note={`${stats.data?.context.accuracy ?? "unknown"} tokens, all receipts`}
           />
-          <Stat label="Changes reviewed" value={changes.data?.receipts.length ?? 0} />
+          <Stat label="Changes reviewed" value={stats.data?.change.reviews ?? "…"} />
         </div>
 
         <h2>Git</h2>
@@ -117,7 +120,12 @@ function ContextReceiptView(props: { receipt: ContextReceipt }): ReactNode {
         <strong>{receipt.task}</strong>
         <div className="reason">
           {formatTime(receipt.timestamp)} · {receipt.project} · budget{" "}
-          {receipt.budget.toLocaleString()}
+          {receipt.budget.toLocaleString()} ·{" "}
+          {/* Receipts written before requesters were recorded have no worker at
+              all, and so read unknown rather than being attributed to a guess. */}
+          {receipt.claimed_worker === undefined
+            ? "requester unknown"
+            : `claims ${receipt.claimed_worker}`}
         </div>
       </div>
 
@@ -228,21 +236,40 @@ export function ChangeInspector(): ReactNode {
         emptyMessage="No change receipts yet. Run: ctxd diff --task …"
       >
         <div className="rows">
-          {(saved.data?.receipts ?? []).map((receipt) => (
-            <div className="row" key={receipt.request_id}>
-              <div className="row-head">
-                <span>{receipt.task}</span>
-                <span className={`tag ${verdictTone(receipt.classification)}`}>
-                  {receipt.classification}
-                </span>
+          {(saved.data?.receipts ?? []).map((receipt) => {
+            const warnings = receipt.signals.filter(
+              (signal) => signal.severity === "warning",
+            );
+            return (
+              <div className="row" key={receipt.request_id}>
+                <div className="row-head">
+                  <span>{receipt.task}</span>
+                  <span className={`tag ${verdictTone(receipt.classification)}`}>
+                    {receipt.classification}
+                  </span>
+                  <span className={`tag ${receipt.risk === "high" ? "danger" : ""}`}>
+                    risk: {receipt.risk}
+                  </span>
+                </div>
+                <div className="reason">
+                  {formatTime(receipt.timestamp)} · {receipt.files_changed} file(s) · +
+                  {receipt.lines_added}/−{receipt.lines_removed} · efficiency{" "}
+                  {receipt.change_efficiency_score.toFixed(2)} · verification{" "}
+                  {receipt.verification_status}
+                </div>
+                {/* The warning is the point of the receipt, so it belongs in the
+                    listing rather than one click away. A summary that showed only
+                    a verdict would make a developer open every row to find the
+                    one that mattered. */}
+                {warnings.map((signal) => (
+                  <div className="reason warn" key={signal.id}>
+                    ⚠ {signal.summary}
+                    {signal.evidence === "" ? "" : ` — ${signal.evidence}`}
+                  </div>
+                ))}
               </div>
-              <div className="reason">
-                {formatTime(receipt.timestamp)} · {receipt.files_changed} file(s) · +
-                {receipt.lines_added}/−{receipt.lines_removed} · efficiency{" "}
-                {receipt.change_efficiency_score.toFixed(2)}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Panel>
     </>
@@ -294,6 +321,9 @@ function ChangeReceiptView(props: { receipt: ChangeReceipt }): ReactNode {
         ))}
       </div>
 
+      <ExpectedScope receipt={receipt} />
+      <NoiseBreakdown receipt={receipt} />
+
       {receipt.signals.length > 0 && (
         <>
           <h2>Signals</h2>
@@ -316,6 +346,8 @@ function ChangeReceiptView(props: { receipt: ChangeReceipt }): ReactNode {
         </>
       )}
 
+      <CommentNoise receipt={receipt} />
+
       <h2>Files</h2>
       <div className="rows">
         {receipt.files.map((file) => (
@@ -332,6 +364,154 @@ function ChangeReceiptView(props: { receipt: ChangeReceipt }): ReactNode {
           </div>
         ))}
       </div>
+
+      <p className="disclaimer">
+        ctxd reports and never reverts. Nothing here is applied to the working tree, no
+        worker output is rewritten, and a large diff is never treated as proof of a wrong
+        one (§50). Analysis version {receipt.algorithm_version}.
+      </p>
+    </>
+  );
+}
+
+/**
+ * The expectation the diff was judged against (§51, §55).
+ *
+ * Showing the expectation next to the actual is what makes a mismatch warning
+ * arguable. Without it the verdict is an opinion the developer can only accept
+ * or ignore; with it they can see that ctxd expected a one-file change, decide
+ * the task was bigger than it read, and move on.
+ */
+function ExpectedScope(props: { receipt: ChangeReceipt }): ReactNode {
+  const { receipt } = props;
+  if (receipt.expected_size === "unknown") {
+    return (
+      <>
+        <h2>Expected scope</h2>
+        <div className="card">
+          <div className="reason">
+            No expectation was formed — the task text did not imply a size, so the diff was
+            judged on its own shape rather than against a target.
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  const overFiles =
+    receipt.expected_files !== null && receipt.files_changed > receipt.expected_files;
+  const overLines =
+    receipt.expected_lines !== null && receipt.semantic_lines > receipt.expected_lines;
+
+  return (
+    <>
+      <h2>Expected scope</h2>
+      <div className="card">
+        <div className="row-head">
+          <strong>{receipt.expected_size} task</strong>
+          <span className={`tag ${overFiles || overLines ? "warn" : "ok"}`}>
+            {overFiles || overLines ? "over expectation" : "within expectation"}
+          </span>
+        </div>
+        <div className="reason">
+          expected about {receipt.expected_files ?? "—"} file(s) and{" "}
+          {receipt.expected_lines ?? "—"} semantic line(s); got {receipt.files_changed}{" "}
+          file(s) and {receipt.semantic_lines}
+        </div>
+        <div className="reason">
+          {/* §51 is explicit that this warns rather than rejects — the
+              expectation decides whether a diff is worth a second look, never
+              whether it is correct. */}
+          The expectation is inferred from the task text and is deliberately coarse. It
+          decides whether a change is worth a second look, never whether it is right.
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Presentation-only churn, separated from semantic change (§53).
+ *
+ * Reported and never acted on. ctxd detects formatting noise precisely so a
+ * reviewer can skip past it, not so anything can be reverted — destroying
+ * worker output to tidy a diff would be a worse problem than the one it solves.
+ */
+function NoiseBreakdown(props: { receipt: ChangeReceipt }): ReactNode {
+  const { receipt } = props;
+
+  const counts: readonly { label: string; value: number; note: string }[] = [
+    {
+      label: "Formatting only",
+      value: receipt.formatting_only_changes,
+      note: "files with no semantic change",
+    },
+    { label: "Comment only", value: receipt.comment_only_changes, note: "files" },
+    { label: "Import only", value: receipt.import_only_changes, note: "files" },
+    { label: "Whole-file rewrites", value: receipt.whole_file_rewrites, note: "files" },
+    { label: "Renames", value: receipt.rename_changes, note: "files" },
+    { label: "Generated", value: receipt.generated_file_changes, note: "files" },
+    { label: "Dependencies", value: receipt.dependency_changes, note: "manifest changes" },
+    { label: "Unrelated", value: receipt.unrelated_files.length, note: "files" },
+  ];
+
+  const present = counts.filter((entry) => entry.value > 0);
+  if (present.length === 0) return null;
+
+  return (
+    <>
+      <h2>Noise</h2>
+      <div className="grid">
+        {present.map((entry) => (
+          <Stat key={entry.label} label={entry.label} value={entry.value} note={entry.note} />
+        ))}
+      </div>
+      {receipt.unrelated_files.length > 0 && (
+        <div className="rows" style={{ marginTop: 12 }}>
+          {receipt.unrelated_files.map((path) => (
+            <div className="row unrelated" key={path}>
+              <span className="path">{path}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="disclaimer">
+        Presentation-only change is separated from semantic change so a reviewer can skip
+        it. ctxd never reverts it and never reformats worker output (§53).
+      </p>
+    </>
+  );
+}
+
+/**
+ * Comments that restate the syntax (§54).
+ *
+ * The wording matters here more than the list. ctxd never deletes a comment,
+ * and the right response to a genuinely redundant one is usually not deletion
+ * at all — durable reasoning belongs in ctxd memory, where the next session
+ * will actually find it, rather than in a comment that the next worker will
+ * "clean up".
+ */
+function CommentNoise(props: { receipt: ChangeReceipt }): ReactNode {
+  const { receipt } = props;
+  if (receipt.comments_flagged.length === 0) return null;
+
+  return (
+    <>
+      <h2>Comments flagged ({receipt.comments_flagged.length})</h2>
+      <div className="rows">
+        {receipt.comments_flagged.map((comment) => (
+          <div className="row" key={comment}>
+            <pre>{comment}</pre>
+          </div>
+        ))}
+      </div>
+      <p className="disclaimer">
+        These restate what the code already says. Comments explaining <em>why</em> — security
+        constraints, business rules, API quirks, workarounds, non-obvious invariants — are
+        never flagged. ctxd does not delete either kind; durable reasoning belongs in project
+        memory, where the next session will find it.
+      </p>
     </>
   );
 }
@@ -459,6 +639,45 @@ export function Resume(): ReactNode {
 
 /* Worker monitor (§69) ------------------------------------------------------ */
 
+function connectionTone(state: string): string {
+  switch (state) {
+    case "connected":
+    case "working":
+      return "ok";
+    case "error":
+      return "danger";
+    case "disconnected":
+      return "warn";
+    default:
+      return "";
+  }
+}
+
+/**
+ * Say what the connection state is based on, in words.
+ *
+ * The open-ended case matters most: a worker whose process was killed cannot
+ * write a disconnect, so "connected" can outlive the connection. Rather than
+ * invent a timeout and present the guess as knowledge, the panel says when the
+ * attachment was seen and lets the developer judge the age (§37).
+ */
+function connectionNote(connection: WorkerConnection): string {
+  switch (connection.state) {
+    case "connected":
+      return `attached ${formatTime(connection.since ?? "")}${
+        connection.openEnded ? " — no disconnect recorded since" : ""
+      }`;
+    case "working":
+      return `request in progress since ${formatTime(connection.since ?? "")}`;
+    case "error":
+      return `last request failed ${formatTime(connection.since ?? "")}`;
+    case "disconnected":
+      return `detached ${formatTime(connection.since ?? "")}`;
+    default:
+      return "no connection events recorded — run ctxd mcp --worker <name> to attribute activity";
+  }
+}
+
 export function WorkerMonitor(): ReactNode {
   const { data, error, loading } = useApi(() => api.workers());
   const workers = data?.workers ?? [];
@@ -476,6 +695,9 @@ export function WorkerMonitor(): ReactNode {
             <div className="row" key={worker.id}>
               <div className="row-head">
                 <strong>{worker.name}</strong>
+                <span className={`tag ${connectionTone(worker.connection.state)}`}>
+                  {worker.connection.state}
+                </span>
                 <span className={`tag ${worker.state === "active" ? "ok" : ""}`}>
                   {worker.state}
                 </span>
@@ -487,6 +709,7 @@ export function WorkerMonitor(): ReactNode {
                   ? "no recorded activity — ctxd has not seen this worker on this project"
                   : `last activity ${formatTime(worker.lastActivity ?? "")}`}
               </div>
+              <div className="reason">{connectionNote(worker.connection)}</div>
               {worker.currentTask !== null && (
                 <div className="reason">current task: {worker.currentTask}</div>
               )}
@@ -502,7 +725,9 @@ export function WorkerMonitor(): ReactNode {
         </div>
         <p className="disclaimer">
           ctxd knows these names but nothing about how any of them work. No provider SDK is
-          involved, and a worker it has never heard of appears here just the same.
+          involved, and a worker it has never heard of appears here just the same. Connection
+          state comes from the event log; the name attached to it is whatever the worker was
+          configured to call itself, which ctxd cannot verify.
         </p>
       </Panel>
     </>

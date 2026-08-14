@@ -1,4 +1,7 @@
 import { useState, type ReactNode } from "react";
+import { ActivityStream } from "./activity.js";
+import { EngineeringGraph } from "./graph.js";
+import { TokenMonitor } from "./tokens.js";
 import {
   ChangeInspector,
   ContextInspector,
@@ -19,8 +22,13 @@ import {
  */
 
 const PANELS = [
+  // The graph is the home screen (§30): it is the visual representation of the
+  // architecture, not an optional extra view of it.
+  { id: "graph", label: "Graph", render: () => <EngineeringGraph /> },
   { id: "dashboard", label: "Dashboard", render: () => <Dashboard /> },
+  { id: "activity", label: "Activity", render: () => <ActivityStream /> },
   { id: "context", label: "Context", render: () => <ContextInspector /> },
+  { id: "tokens", label: "Tokens", render: () => <TokenMonitor /> },
   { id: "changes", label: "Changes", render: () => <ChangeInspector /> },
   { id: "memory", label: "Memory", render: () => <MemoryViewer /> },
   { id: "tasks", label: "Tasks", render: () => <TaskBoard /> },
@@ -30,7 +38,7 @@ const PANELS = [
 ] as const;
 
 export function App(): ReactNode {
-  const [active, setActive] = useState<string>("dashboard");
+  const [active, setActive] = useState<string>("graph");
   const panel = PANELS.find((entry) => entry.id === active) ?? PANELS[0];
 
   return (

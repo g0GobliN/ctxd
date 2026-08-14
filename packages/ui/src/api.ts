@@ -59,6 +59,8 @@ export interface ContextReceipt {
   readonly timestamp: string;
   readonly task: string;
   readonly project: string;
+  /** Self-declared requester. Absent on receipts written before it was recorded. */
+  readonly claimed_worker?: string;
   readonly budget: number;
   readonly candidate_total_tokens: number;
   readonly final_total_tokens: number;
@@ -97,13 +99,26 @@ export interface ChangeReceipt {
   readonly timestamp: string;
   readonly task: string;
   readonly worker: string;
+  /** What the diff was taken against, e.g. "HEAD (staged + unstaged)". */
+  readonly scope: string;
   readonly files_changed: number;
   readonly lines_added: number;
   readonly lines_removed: number;
+  readonly lines_modified: number;
   readonly semantic_lines: number;
   readonly formatting_lines: number;
+  readonly formatting_only_changes: number;
+  readonly comment_only_changes: number;
+  readonly import_only_changes: number;
   readonly unrelated_files: readonly string[];
   readonly dependency_changes: number;
+  readonly generated_file_changes: number;
+  readonly rename_changes: number;
+  readonly whole_file_rewrites: number;
+  /** The expectation the task implied, against which the diff was judged (§51). */
+  readonly expected_size: string;
+  readonly expected_files: number | null;
+  readonly expected_lines: number | null;
   readonly classification: string;
   readonly classification_reasons: readonly string[];
   readonly recommendation: string;
@@ -111,7 +126,11 @@ export interface ChangeReceipt {
   readonly change_efficiency_score: number;
   readonly verification_status: string;
   readonly signals: readonly ChangeSignal[];
+  /** Comments that restate the syntax. Flagged, never deleted (§54). */
+  readonly comments_flagged: readonly string[];
   readonly files: readonly ChangeReceiptFile[];
+  readonly warnings: readonly string[];
+  readonly algorithm_version: string;
 }
 
 export class ApiError extends Error {
@@ -131,8 +150,110 @@ async function request<T>(path: string): Promise<T> {
   return payload;
 }
 
+export interface CtxdEvent {
+  readonly id: number;
+  readonly type: string;
+  readonly timestamp: string;
+  readonly projectId: string;
+  readonly sessionId: string | null;
+  readonly taskId: string | null;
+  /**
+   * What the producer said it was.
+   *
+   * Named `claimedWorker` rather than `worker` because ctxd cannot check it:
+   * the MCP server observes that a client attached, not which one. Render it
+   * as a claim, never as an identity ctxd verified.
+   */
+  readonly claimedWorker: string | null;
+  readonly data: Readonly<Record<string, string | number | boolean | null>>;
+}
+
+export interface GraphWorkerNode {
+  readonly id: string;
+  readonly claimedName: string;
+  readonly connection: string;
+  readonly since: string | null;
+  readonly openEnded: boolean;
+  readonly currentTask: string | null;
+}
+
+export interface CtxdGraph {
+  readonly core: {
+    readonly version: string;
+    readonly mode: string;
+    readonly dir: string;
+    readonly projects: number;
+    readonly workersAttached: number;
+    readonly workersKnown: number;
+  };
+  readonly context: {
+    readonly lastRequestId: string | null;
+    readonly lastAt: string | null;
+    readonly candidateTokens: number | null;
+    readonly finalTokens: number | null;
+    readonly claimedWorker: string | null;
+    readonly accuracy: string;
+  };
+  readonly memory: { readonly total: number; readonly byType: Record<string, number> };
+  readonly repository: { readonly git: string; readonly dir: string };
+  readonly verification: {
+    readonly status: string;
+    readonly at: string | null;
+    readonly source: string;
+    /** current | stale | unknown — judged against the tree, not a clock (UI-8). */
+    readonly freshness: string;
+    readonly changedSince: string | null;
+    readonly reason: string;
+  };
+  readonly tasks: { readonly total: number; readonly inProgress: number };
+  readonly workers: readonly GraphWorkerNode[];
+}
+
+/** The reporting windows `/api/stats` accepts. Named by the core, not here. */
+export type StatsWindow = "today" | "7d" | "30d" | "all";
+
+export interface Stats {
+  readonly window: StatsWindow;
+  readonly scope: string;
+  /** The cutoff the window resolved to, or null for everything on disk. */
+  readonly since: string | null;
+  readonly context: {
+    readonly requests: number;
+    readonly candidateTokens: number;
+    readonly finalTokens: number;
+    readonly avoidedTokens: number;
+    readonly duplicateTokens: number;
+    readonly irrelevantTokens: number;
+    readonly lowPriorityTokens: number;
+    readonly compressedTokens: number;
+    /** exact | estimated | unknown — never dropped, never assumed. */
+    readonly accuracy: string;
+    readonly firstAt?: string;
+    readonly lastAt?: string;
+  };
+  readonly change: {
+    readonly reviews: number;
+    readonly filesChanged: number;
+    readonly linesAdded: number;
+    readonly linesRemoved: number;
+    readonly semanticLines: number;
+    readonly formattingLines: number;
+    readonly unrelatedFiles: number;
+    readonly dependencyChanges: number;
+    readonly meanEfficiency?: number;
+    readonly byClassification: Readonly<Record<string, number>>;
+    readonly byVerification: Readonly<Record<string, number>>;
+  };
+  /** Receipts that could not be read, so a gap in the total is never silent. */
+  readonly unreadable: readonly string[];
+}
+
 export const api = {
   status: () => request<Status>("/api/status"),
+  graph: () => request<CtxdGraph>("/api/graph"),
+  stats: (window: StatsWindow) => request<Stats>(`/api/stats?window=${window}`),
+  recentEvents: (limit = 50) =>
+    request<{ events: CtxdEvent[]; latestId: number }>(`/api/events/recent?limit=${limit}`),
   projects: () => request<{ projects: Project[] }>("/api/projects"),
   memories: (query: string) =>
     request<{ memories?: Memory[]; hits?: Memory[] }>(
@@ -150,16 +271,30 @@ export const api = {
     ),
 };
 
+export interface WorkerConnection {
+  /** connected | working | error | disconnected | unknown */
+  readonly state: string;
+  readonly since: string | null;
+  readonly lastActivityAt: string | null;
+  /** Observed attaching, never observed leaving — which a killed process cannot do. */
+  readonly openEnded: boolean;
+  /** Always true: the name is self-declared and ctxd cannot check it (§6). */
+  readonly claimed: boolean;
+}
+
 export interface Worker {
   readonly id: string;
   readonly name: string;
   readonly capabilities: readonly string[];
+  /** What the session history says: active | idle | unknown. */
   readonly state: string;
   readonly source: string;
   readonly lastActivity: string | null;
   readonly currentTask: string | null;
   readonly lastTask: string | null;
   readonly lastSummary: string | null;
+  /** What the event log says right now. Answers a different question to `state`. */
+  readonly connection: WorkerConnection;
 }
 
 export interface Settings {
@@ -168,4 +303,59 @@ export interface Settings {
   readonly dataDir: string;
   readonly editable: boolean;
   readonly note: string;
+}
+
+/**
+ * Subscribe to the live event stream.
+ *
+ * One subscription for the whole interface, not one per panel: every panel
+ * that wants live activity reads from the same connection, so the API sees a
+ * single stream regardless of how many views are open.
+ *
+ * Reconnection is `EventSource`'s own — it resends the last event id it saw,
+ * and the server replays only what was missed, so a dropped connection costs
+ * nothing but the gap.
+ */
+export function subscribeToEvents(
+  onEvent: (event: CtxdEvent) => void,
+  onStateChange?: (connected: boolean) => void,
+): () => void {
+  const source = new EventSource("/api/events");
+
+  const handle = (message: MessageEvent<string>): void => {
+    try {
+      onEvent(JSON.parse(message.data) as CtxdEvent);
+    } catch {
+      // A frame that will not parse is dropped rather than rendered. Showing a
+      // malformed event as activity would be inventing activity.
+    }
+  };
+
+  // Every event carries its type as the SSE event name, so a named listener is
+  // needed per type; the default `message` handler would never fire.
+  const types = [
+    "worker_connected",
+    "worker_disconnected",
+    "worker_request_started",
+    "worker_request_finished",
+    "worker_error",
+    "context_requested",
+    "context_built",
+    "verification_started",
+    "verification_finished",
+    "memory_updated",
+    "task_updated",
+    "checkpoint_created",
+    "handoff_created",
+    "change_analyzed",
+  ];
+  for (const type of types) source.addEventListener(type, handle as EventListener);
+
+  source.addEventListener("open", () => onStateChange?.(true));
+  source.addEventListener("error", () => onStateChange?.(false));
+
+  return () => {
+    for (const type of types) source.removeEventListener(type, handle as EventListener);
+    source.close();
+  };
 }

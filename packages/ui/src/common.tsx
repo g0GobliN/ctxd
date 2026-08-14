@@ -1,6 +1,6 @@
 /** Small shared pieces. Kept together because each is a few lines. */
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError } from "./api.js";
 
 /**
@@ -9,23 +9,45 @@ import { ApiError } from "./api.js";
  * Errors are surfaced rather than swallowed: a panel that silently shows
  * nothing is indistinguishable from a panel with nothing to show, and ctxd's
  * whole premise is that absence should be explained.
+ *
+ * Two ways to fetch again. `reload` is the one a person triggers, and shows
+ * the loading state because they are waiting for it. `refresh` is the one an
+ * event triggers, and does not: a panel that blanked every time a worker made
+ * a tool call would be unreadable exactly when there was most to read. A
+ * failure still replaces the view either way — a stale graph presented as a
+ * current one is the failure this project cannot afford (§37).
  */
 export function useApi<T>(load: () => Promise<T>, deps: readonly unknown[] = []): {
   data: T | undefined;
   error: string | undefined;
   loading: boolean;
   reload: () => void;
+  refresh: () => void;
 } {
   const [data, setData] = useState<T | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [nonce, setNonce] = useState(0);
 
-  const reload = useCallback(() => setNonce((value) => value + 1), []);
+  // Read and cleared by the effect below, so it describes the fetch it
+  // triggered rather than whichever fetch happens to be in flight.
+  const quiet = useRef(false);
+
+  const reload = useCallback(() => {
+    quiet.current = false;
+    setNonce((value) => value + 1);
+  }, []);
+
+  const refresh = useCallback(() => {
+    quiet.current = true;
+    setNonce((value) => value + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    const silent = quiet.current;
+    quiet.current = false;
+    if (!silent) setLoading(true);
 
     load()
       .then((result) => {
@@ -39,7 +61,7 @@ export function useApi<T>(load: () => Promise<T>, deps: readonly unknown[] = [])
         setError(cause instanceof ApiError ? cause.message : String(cause));
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && !silent) setLoading(false);
       });
 
     return () => {
@@ -48,7 +70,7 @@ export function useApi<T>(load: () => Promise<T>, deps: readonly unknown[] = [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nonce, ...deps]);
 
-  return { data, error, loading, reload };
+  return { data, error, loading, reload, refresh };
 }
 
 export function Panel(props: {
