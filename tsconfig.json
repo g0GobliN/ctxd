@@ -4,6 +4,7 @@
     { "path": "./packages/utils" },
     { "path": "./packages/core" },
     { "path": "./packages/db" },
+    { "path": "./packages/events" },
     { "path": "./packages/context" },
     { "path": "./packages/project" },
     { "path": "./packages/memory" },

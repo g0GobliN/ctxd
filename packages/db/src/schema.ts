@@ -192,6 +192,48 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 5,
+    name: "events",
+    up: (db) => {
+      db.exec(`
+        -- The live event log (§7.2).
+        --
+        -- Separate from session_events, which stays as the per-session
+        -- narrative: its session_id is NOT NULL, so it cannot hold an event
+        -- that happens before a session exists — a worker attaching, for
+        -- instance. This table takes those.
+        --
+        -- It is also the transport between processes. MCP, the CLI and the API
+        -- each run separately and share no memory, so a producer appends here
+        -- and the API process tails the table and fans out over SSE. SQLite is
+        -- already the shared state and already WAL; a socket would have to be
+        -- invented, and would behave differently on Windows.
+        --
+        -- Everything except project, type and time is nullable, because an
+        -- event with no task must record no task rather than a plausible one.
+        CREATE TABLE events (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+          task_id    TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+          -- Self-declared by the producer, never verified (§6). Stored as the
+          -- claim it is; the interface must present it as one.
+          worker     TEXT,
+          type       TEXT NOT NULL,
+          -- JSON object. Identifiers only — never file contents or memory
+          -- bodies, which every local process could then read off the stream.
+          data       TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        ) STRICT;
+
+        -- The autoincrement id is the SSE cursor: a reconnecting client sends
+        -- Last-Event-ID and gets only what it missed. Monotonic per database,
+        -- so the scan is a range scan from that id.
+        CREATE INDEX events_project_id ON events (project_id, id);
+      `);
+    },
+  },
 ];
 
 /** Highest migration version known to this build. */

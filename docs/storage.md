@@ -99,6 +99,13 @@ being downgraded. The schema is never silently altered.
 | 2 | `projects`, `files` |
 | 3 | `memories` + FTS5 index |
 | 4 | `tasks`, `sessions`, `session_events`, `checkpoints` |
+| 5 | `events` — the live event log ([events.md](events.md)) |
+
+`events` is separate from `session_events` rather than an extension of it:
+`session_events.session_id` is `NOT NULL`, and a worker attaching happens before
+any session exists. It is also the only table pruned on a schedule — 30 days by
+default — because it gains rows with every tool call, while sessions,
+checkpoints and receipts remain the permanent record.
 
 ## Moving to another machine
 

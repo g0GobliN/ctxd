@@ -24,6 +24,7 @@
     "@ctxd/context": "workspace:*",
     "@ctxd/core": "workspace:*",
     "@ctxd/db": "workspace:*",
+    "@ctxd/events": "workspace:*",
     "@ctxd/diff": "workspace:*",
     "@ctxd/firewall": "workspace:*",
     "@ctxd/mcp": "workspace:*",

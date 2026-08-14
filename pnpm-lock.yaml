@@ -29,6 +29,9 @@ importers:
       '@ctxd/diff':
         specifier: workspace:*
         version: link:packages/diff
+      '@ctxd/events':
+        specifier: workspace:*
+        version: link:packages/events
       '@ctxd/firewall':
         specifier: workspace:*
         version: link:packages/firewall
@@ -86,6 +89,9 @@ importers:
       '@ctxd/diff':
         specifier: workspace:*
         version: link:../diff
+      '@ctxd/events':
+        specifier: workspace:*
+        version: link:../events
       '@ctxd/firewall':
         specifier: workspace:*
         version: link:../firewall
@@ -95,6 +101,9 @@ importers:
       '@ctxd/project':
         specifier: workspace:*
         version: link:../project
+      '@ctxd/stats':
+        specifier: workspace:*
+        version: link:../stats
       '@ctxd/utils':
         specifier: workspace:*
         version: link:../utils
@@ -125,6 +134,9 @@ importers:
       '@ctxd/diff':
         specifier: workspace:*
         version: link:../diff
+      '@ctxd/events':
+        specifier: workspace:*
+        version: link:../events
       '@ctxd/firewall':
         specifier: workspace:*
         version: link:../firewall
@@ -177,6 +189,12 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/events:
+    dependencies:
+      '@ctxd/db':
+        specifier: workspace:*
+        version: link:../db
+
   packages/firewall:
     dependencies:
       '@ctxd/context':
@@ -209,6 +227,9 @@ importers:
       '@ctxd/db':
         specifier: workspace:*
         version: link:../db
+      '@ctxd/events':
+        specifier: workspace:*
+        version: link:../events
       '@ctxd/firewall':
         specifier: workspace:*
         version: link:../firewall
@@ -218,6 +239,9 @@ importers:
       '@ctxd/project':
         specifier: workspace:*
         version: link:../project
+      '@ctxd/utils':
+        specifier: workspace:*
+        version: link:../utils
       '@ctxd/work':
         specifier: workspace:*
         version: link:../work
