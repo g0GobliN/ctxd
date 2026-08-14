@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ctxd",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "dev.ctxd.desktop",
   "build": {
     "frontendDist": "../ui/dist"
@@ -13,6 +13,27 @@
     }
   },
   "bundle": {
-    "active": false
+    "active": true,
+    "targets": ["msi", "nsis", "deb", "appimage", "dmg"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "A context firewall for AI coding agents",
+    "longDescription": "Local-first engineering memory that gives AI coding agents the minimum useful context for a task, and explains every token it sent.",
+    "licenseFile": "../../LICENSE",
+    "resources": {
+      "sidecar/runtime": "runtime/",
+      "sidecar/app": "app/"
+    },
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"]
+      }
+    }
   }
 }

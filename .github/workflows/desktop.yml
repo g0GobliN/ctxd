@@ -1,0 +1,136 @@
+name: Desktop installers
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Published ctxd version to bundle (defaults to this checkout's)"
+        type: string
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing must not cancel the others: a Linux packaging
+      # problem should still leave the Windows installer to download.
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: Windows
+            artifact: ctxd-windows
+          - os: ubuntu-22.04
+            label: Linux
+            artifact: ctxd-linux
+          - os: macos-latest
+            label: macOS
+            artifact: ctxd-macos
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Tauri's webview and packaging dependencies. 22.04 carries
+      # webkit2gtk-4.1, which is what Tauri 2 links against.
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+            patchelf libgtk-3-dev
+
+      - run: pnpm install --frozen-lockfile
+
+      # The interface is bundled into the app, and it is gitignored — without
+      # this the window would open onto nothing.
+      - name: Build the interface
+        run: pnpm build:all
+
+      # Installs the *published* ctxd plus a copy of this runner's Node. The
+      # native SQLite binding has to be the one built for this platform, which
+      # is the whole reason this job runs three times.
+      - name: Stage the bundled runtime and application
+        run: >-
+          node --experimental-strip-types scripts/stage-desktop.ts
+          ${{ inputs.version && format('--version={0}', inputs.version) || '' }}
+
+      - name: Rust tests
+        run: cargo test --release --manifest-path packages/desktop/Cargo.toml
+
+      - name: Build installers
+        run: node node_modules/@tauri-apps/cli/tauri.js build
+        working-directory: packages/desktop
+
+      - name: Collect installers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-installers
+          # Copy whatever the platform's bundler actually produced rather than
+          # naming files that may not exist — an empty upload is a silent
+          # failure, so the listing below is also the check.
+          find packages/desktop/target/release/bundle -type f \
+            \( -name '*.msi' -o -name '*-setup.exe' -o -name '*.deb' \
+               -o -name '*.AppImage' -o -name '*.dmg' \) \
+            -exec cp {} dist-installers/ \;
+          ls -la dist-installers
+          test -n "$(ls -A dist-installers)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist-installers/*
+          if-no-files-found: error
+
+  release:
+    name: Attach to the release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+
+      - run: ls -la installers
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: installers/*
+          fail_on_unmatched_files: true
+          body: |
+            Install without cloning anything:
+
+            **Command line** — `npm install -g @ctxd/cli`
+
+            **Desktop app** — download below. Each installer carries its own
+            Node runtime and a copy of ctxd, so nothing else is required.
+
+            | Platform | File |
+            |---|---|
+            | Windows | `.msi`, or `-setup.exe` |
+            | Linux | `.deb`, or `.AppImage` |
+            | macOS | `.dmg` |
+
+            The installers are unsigned. Windows SmartScreen and macOS
+            Gatekeeper will warn about that, and both need an explicit
+            override until the project has signing certificates.
+
+            Verified on Windows 11. The Linux and macOS builds are produced
+            here but have not been run by anyone — treat them as untested
+            until they have been.

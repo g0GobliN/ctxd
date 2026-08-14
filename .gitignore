@@ -21,3 +21,8 @@ packages/desktop/target/
 # dependencies. Committing them would mean a diff whenever Tauri updates,
 # describing nothing this project decided.
 packages/desktop/gen/
+
+# The desktop app's bundled runtime and application, assembled by
+# scripts/stage-desktop.ts on the machine doing the build. Platform-specific
+# and ~100MB; rebuilt, never committed.
+packages/desktop/sidecar/
