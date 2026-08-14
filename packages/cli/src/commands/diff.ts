@@ -4,6 +4,7 @@ import { ensureDataDir, resolvePaths } from "@ctxd/core";
 import { migrate, openDatabase } from "@ctxd/db";
 import { formatMemoryMatches, memoriesForPaths, type MemoryMatch } from "@ctxd/memory";
 import { detectProject, findProjectByRoot } from "@ctxd/project";
+import { record } from "../events.js";
 import {
   analyzeWorkingTree,
   formatChangeReceipt,
@@ -162,6 +163,23 @@ export function diffCommand(argv: readonly string[]): number {
       process.stderr.write(`ctxd diff: could not save receipt (${(error as Error).message})\n`);
     }
   }
+
+  // The verdict and the counts behind it. The receipt id is included so the
+  // interface can open the full analysis; the diff itself never travels on the
+  // event stream, which every local process can read.
+  record(dir, "change_analyzed", {
+    worker: values.worker,
+    data: {
+      requestId: receipt.request_id,
+      classification: receipt.classification,
+      risk: receipt.risk,
+      filesChanged: receipt.files_changed,
+      semanticLines: receipt.semantic_lines,
+      formattingLines: receipt.formatting_lines,
+      unrelatedFiles: receipt.unrelated_files.length,
+      verificationStatus: receipt.verification_status,
+    },
+  });
 
   if (values.json === true) {
     process.stdout.write(

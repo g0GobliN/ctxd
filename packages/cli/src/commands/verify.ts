@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import { readFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { isGitRepository, readDiff } from "@ctxd/diff";
+import { record } from "../events.js";
 import {
   buildCorrectionContext,
   formatVerification,
@@ -126,13 +127,35 @@ export function verifyCommand(argv: readonly string[]): number {
     return 1;
   }
 
+  // A dry run reports which checks would run without running them, so it is not
+  // verification and must not appear in the log as verification.
+  const dryRun = values["dry-run"] === true;
+  if (!dryRun) {
+    record(dir, "verification_started", {
+      data: { checks: (only ?? CHECK_KINDS).join(","), rules: rules.length },
+    });
+  }
+
   const result = verify({
     cwd: dir,
     files,
     rules,
     ...(only === undefined ? {} : { only }),
-    ...(values["dry-run"] === true ? { dryRun: true } : {}),
+    ...(dryRun ? { dryRun: true } : {}),
   });
+
+  if (!dryRun) {
+    record(dir, "verification_finished", {
+      data: {
+        status: result.status,
+        checks: result.checks.length,
+        failed: result.checks.filter((check) => check.status === "failed").length,
+        // A check that could not run is not a check that passed, and the
+        // difference is the whole reason verification is trustworthy (§58).
+        unavailable: result.checks.filter((check) => check.status === "unavailable").length,
+      },
+    });
+  }
 
   if (values.json === true) {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

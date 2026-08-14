@@ -13,6 +13,7 @@ Commands:
   checkpoint  Record where the work stands
   context     Build the minimum useful context for a task
   decision    Record and surface project decisions
+  desktop     The local interface in a window
   diff        Inspect a worker's changes before accepting them
   doctor      Check that the local environment is usable
   efficiency  The context reduction, on its own
@@ -55,6 +56,7 @@ const COMMANDS: Readonly<Record<string, () => Promise<CommandHandler>>> = {
   context: async () => (await import("./commands/context.js")).contextCommand,
   decision: async () => (await import("./commands/knowledge.js")).decisionCommand,
   decisions: async () => (await import("./commands/knowledge.js")).decisionCommand,
+  desktop: async () => (await import("./commands/desktop.js")).desktopCommand,
   diff: async () => (await import("./commands/diff.js")).diffCommand,
   doctor: async () => (await import("./commands/doctor.js")).doctorCommand,
   efficiency: async () => (await import("./commands/stats.js")).efficiencyCommand,

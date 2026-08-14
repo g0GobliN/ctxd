@@ -23,9 +23,12 @@ import {
   startSession,
   subtasks,
   taskProgress,
+  transferTask,
+  formatTransfer,
   updateTask,
 } from "@ctxd/work";
 import { formatKeyValue } from "@ctxd/utils";
+import { record } from "../events.js";
 
 interface Resolved {
   readonly db: Db;
@@ -63,6 +66,8 @@ const SHARED_OPTIONS = {
   next: { type: "string" },
   summary: { type: "string" },
   to: { type: "string" },
+  from: { type: "string" },
+  accept: { type: "boolean" },
   all: { type: "boolean" },
 } as const;
 
@@ -419,9 +424,21 @@ export const HANDOFF_HELP = `ctxd handoff — hand the work to another worker
 
 Usage:
   ctxd handoff [--to <worker>]
+  ctxd handoff --to <worker> --accept [--from <worker>] [--summary <note>]
 
 Assembles the task, what is done, what remains, binding constraints, decisions,
-known bugs and Git state from recorded history.`;
+known bugs and Git state from recorded history.
+
+Without --accept this only reads: it prints the handoff and changes nothing.
+With --accept the work actually moves — a checkpoint is written and the task is
+reassigned — so an interrupted session cannot lose the handover.
+
+Options:
+  --to <worker>      Who should pick the work up
+  --accept           Record the handover instead of only describing it
+  --from <worker>    Who is handing over (self-declared; ctxd cannot verify it)
+  --summary <note>   A note recorded with the checkpoint
+  --task <id>        Hand over a specific task rather than the current one`;
 
 export function handoffCommand(argv: readonly string[]): number {
   if (argv.includes("--help") || argv.includes("-h")) {
@@ -433,20 +450,60 @@ export function handoffCommand(argv: readonly string[]): number {
   if (parsed === undefined) return 1;
   const { values } = parsed;
 
-  const resolved = open(values.dir ?? ".");
+  const accept = values.accept === true;
+  if (accept && (values.to === undefined || values.to.trim() === "")) {
+    process.stderr.write("ctxd handoff: --accept needs --to <worker>\n");
+    return 1;
+  }
+
+  const dir = values.dir ?? ".";
+  const resolved = open(dir);
   if (typeof resolved === "string") {
     process.stderr.write(`ctxd handoff: ${resolved}\n`);
     return 1;
   }
 
   try {
-    const handoff = buildHandoff(resolved.db, {
+    if (!accept) {
+      const handoff = buildHandoff(resolved.db, {
+        projectId: resolved.projectId,
+        root: resolved.root,
+        ...(values.to === undefined ? {} : { recommendedWorker: values.to }),
+      });
+      process.stdout.write(`${formatHandoff(handoff)}\n`);
+      return 0;
+    }
+
+    const result = transferTask(resolved.db, {
       projectId: resolved.projectId,
       root: resolved.root,
-      ...(values.to === undefined ? {} : { recommendedWorker: values.to }),
+      toWorker: values.to as string,
+      ...(values.from === undefined ? {} : { fromWorker: values.from }),
+      ...(values.summary === undefined ? {} : { note: values.summary }),
+      ...(values.task === undefined ? {} : { taskId: values.task }),
     });
-    process.stdout.write(`${formatHandoff(handoff)}\n`);
+
+    process.stdout.write(`${formatTransfer(result)}${formatHandoff(result.handoff)}\n`);
+
+    // Emitted after the work, on its own connection, so the startup path the
+    // performance tests assert is untouched.
+    record(dir, "handoff_created", {
+      ...(values.from === undefined ? {} : { worker: values.from }),
+      data: {
+        fromWorker: result.fromWorker,
+        toWorker: result.toWorker,
+        taskId: result.task?.id ?? null,
+        checkpointId: result.checkpoint.id,
+        // A count, never the handoff text: the stream is a read route every
+        // local process can see, and the body belongs behind /api/session.
+        warnings: result.warnings.length,
+      },
+    });
+
     return 0;
+  } catch (error) {
+    process.stderr.write(`ctxd handoff: ${(error as Error).message}\n`);
+    return 1;
   } finally {
     resolved.db.close();
   }

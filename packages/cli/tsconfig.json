@@ -5,5 +5,5 @@
     "outDir": "./dist"
   },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../ai" }, { "path": "../api" }, { "path": "../context" }, { "path": "../core" }, { "path": "../db" }, { "path": "../diff" }, { "path": "../firewall" }, { "path": "../mcp" }, { "path": "../memory" }, { "path": "../project" }, { "path": "../stats" }, { "path": "../utils" }, { "path": "../verify" }, { "path": "../work" }]
+  "references": [{ "path": "../ai" }, { "path": "../api" }, { "path": "../context" }, { "path": "../core" }, { "path": "../db" }, { "path": "../diff" }, { "path": "../events" }, { "path": "../firewall" }, { "path": "../mcp" }, { "path": "../memory" }, { "path": "../project" }, { "path": "../stats" }, { "path": "../utils" }, { "path": "../verify" }, { "path": "../work" }]
 }
