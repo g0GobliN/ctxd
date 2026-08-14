@@ -16,3 +16,8 @@ packages/ui/dist/
 # shell is a binary, and a binary that resolves different dependency versions
 # per machine is a binary nobody can reproduce.
 packages/desktop/target/
+
+# Tauri writes these permission schemas on every build from the crate's own
+# dependencies. Committing them would mean a diff whenever Tauri updates,
+# describing nothing this project decided.
+packages/desktop/gen/

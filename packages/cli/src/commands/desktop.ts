@@ -142,7 +142,13 @@ export async function desktopCommand(argv: readonly string[]): Promise<number> {
   const child = spawn(shell as string, [], {
     // The shell refuses anything that is not loopback, so this is the address
     // it will accept and the only kind the API ever binds (§62).
-    env: { ...process.env, CTXD_UI_URL: api.url },
+    //
+    // The token travels the same way. Mutating routes require it, and a window
+    // that could only read would make the desktop build the weakest way to use
+    // ctxd. Handing it to the shell rather than serving it over HTTP keeps it
+    // out of reach of anything that can merely reach the port: the shell puts
+    // it into its own webview, and no request can ask the server for it.
+    env: { ...process.env, CTXD_UI_URL: api.url, CTXD_UI_TOKEN: api.token },
     stdio: "inherit",
   });
 

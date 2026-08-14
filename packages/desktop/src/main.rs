@@ -57,6 +57,36 @@ fn resolve_url() -> Result<String, String> {
     Ok(url)
 }
 
+/// The local API token, if `ctxd desktop` supplied one.
+///
+/// Only a hex token is accepted. The value is interpolated into a script the
+/// webview runs, so anything that could close a string literal and continue
+/// with code of its own must never reach it — and the real token is 32 random
+/// bytes rendered as hex, so this rejects nothing legitimate.
+///
+/// A missing or malformed token is not an error: the window still opens and
+/// reads work, and the Settings panel accepts a token by hand. Refusing to
+/// start would make an unreadable environment variable fatal to a viewer that
+/// does not need one.
+fn is_hex_token(token: &str) -> bool {
+    !token.is_empty() && token.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+fn token_script() -> Option<String> {
+    let token = std::env::var("CTXD_UI_TOKEN").ok()?;
+
+    if !is_hex_token(&token) {
+        eprintln!("ctxd desktop: ignoring a CTXD_UI_TOKEN that is not hexadecimal");
+        return None;
+    }
+
+    // Stored where the interface already looks for it, so the browser path and
+    // the desktop path read one key rather than two.
+    Some(format!(
+        "try {{ window.localStorage.setItem('ctxd.apiToken', '{token}'); }} catch (e) {{}}"
+    ))
+}
+
 fn main() {
     let url = match resolve_url() {
         Ok(url) => url,
@@ -79,11 +109,20 @@ fn main() {
             // Built here rather than declared in tauri.conf.json because the URL
             // is only known at run time: `ctxd desktop` passes the address the
             // API actually bound to.
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
+            let mut window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
                 .title("ctxd")
                 .inner_size(1280.0, 860.0)
-                .min_inner_size(720.0, 520.0)
-                .build()?;
+                .min_inner_size(720.0, 520.0);
+
+            // Runs before the page loads, so the interface finds the token
+            // already present rather than asking for it. This is the whole
+            // reason the desktop build can write without the paste a browser
+            // needs: the script reaches only this webview.
+            if let Some(script) = token_script() {
+                window = window.initialization_script(&script);
+            }
+
+            window.build()?;
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -111,6 +150,21 @@ mod tests {
         assert!(!is_loopback("https://example.com"));
         assert!(!is_loopback("file:///etc/passwd"));
         assert!(!is_loopback(""));
+    }
+
+    #[test]
+    fn only_a_hex_token_reaches_the_injected_script() {
+        // The guard that matters: the token is interpolated into JavaScript, so
+        // a value able to close the string literal would be code execution in
+        // the webview. A real token is 32 random bytes as hex.
+        assert!(super::is_hex_token("4b584d1be060999fb6d2047247551196"));
+        assert!(super::is_hex_token("ABCDEF0123456789"));
+
+        assert!(!super::is_hex_token(""));
+        assert!(!super::is_hex_token("'); alert(1); ('"));
+        assert!(!super::is_hex_token("deadbeef'"));
+        assert!(!super::is_hex_token("not-hex-at-all"));
+        assert!(!super::is_hex_token("dead beef"));
     }
 
     #[test]
