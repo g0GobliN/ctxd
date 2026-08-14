@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ctxd": {
+      "command": "node",
+      "args": ["packages/cli/dist/index.js", "mcp", "--dir", ".", "--worker", "claude"]
+    }
+  }
+}

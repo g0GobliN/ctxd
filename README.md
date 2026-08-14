@@ -262,10 +262,10 @@ Every command supports `--help`.
 
 ## Project status
 
-**Early but real.** Phases 1–9 of the [specification](docs/plan.md) are built,
-tested and documented — 431 tests, including seven golden benchmarks that turn
+**Early but real.** Phases 1–10 of the [specification](docs/plan.md) are built,
+tested and documented — 655 tests, including seven golden benchmarks that turn
 77k–151k token fixture repositories into 2k–6k while keeping everything each
-task needs.
+task needs, and three change benchmarks covering the output firewall.
 
 | Phase | Status |
 |-------|--------|
@@ -281,8 +281,21 @@ task needs.
 | 9 · Optimisation + benchmarks | ✅ |
 | 10 · Optional local AI | ✅ interfaces |
 
-Not built yet: the worker monitor and settings panels. Nothing in this
-repository calls a network service or an AI model.
+**2.0 — the graph control centre — is complete.** UI-0 through UI-12: the event
+log and live stream, real worker state, the interactive graph home screen, the
+activity stream, the Change Firewall panel, the token monitor, verification
+freshness, cross-worker handoff, and the Tauri desktop shell. Eleven panels
+ship, worker monitor and settings among them.
+
+```bash
+ctxd ui        # the interface in a browser
+ctxd desktop   # the same interface in a native window
+```
+
+The desktop shell is verified on Windows 11 and not yet built on macOS or
+Linux. There is no installer yet — see [desktop.md](docs/desktop.md).
+
+Nothing in this repository calls a network service or an AI model.
 
 APIs may change before 1.0.
 
@@ -300,7 +313,10 @@ APIs may change before 1.0.
 | [work.md](docs/work.md) | Tasks, sessions, checkpoints, handoffs |
 | [api.md](docs/api.md) | The local HTTP API and its security model |
 | [ui.md](docs/ui.md) | The interface, how it is served, and its dependencies |
+| [desktop.md](docs/desktop.md) | The Tauri shell, its security model, and how to build it |
 | [mcp.md](docs/mcp.md) | The MCP tool surface |
+| [workers.md](docs/workers.md) | Worker identity as a claim, connection states, the registry |
+| [events.md](docs/events.md) | The event log and the live stream |
 | [benchmarks.md](docs/benchmarks.md) | Benchmark scenarios, results, performance targets |
 | [local-ai.md](docs/local-ai.md) | The optional-AI interfaces and the offline guarantee |
 | [development.md](docs/development.md) | Building, testing, conventions |

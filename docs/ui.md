@@ -5,10 +5,28 @@ pnpm build:all   # build the core packages and the interface bundle
 ctxd ui          # http://127.0.0.1:4317
 ```
 
-The interface is a **viewer**, not a second brain. It renders what the core
-services already decided and never recomputes a verdict of its own — anything it
-shows can be obtained from the CLI, and it agrees with the CLI because both read
-the same receipts. ctxd is not an IDE; the brain stays in `core`.
+The interface **never decides anything**. It renders what the core services
+already decided and never recomputes a verdict of its own — anything it shows
+can be obtained from the CLI, and it agrees with the CLI because both read the
+same receipts. ctxd is not an IDE; the brain stays in `core`.
+
+Since 2.1 it can also *write*, and the goal is that nothing requires a terminal:
+registering a project, building context, recording a memory, creating and moving
+tasks, starting a session, taking a checkpoint, handing work to another worker
+and running verification all have routes (§27 names the API as an engineering
+interface, alongside the CLI, core and MCP). Every one of them calls the same
+function the CLI calls, so there is no second implementation of an authority
+rule to drift — and an authority refusal is reported, never worked around. See
+[api.md](api.md).
+
+`ctxd export`/`import` and `ctxd doctor` are what remain CLI-only.
+
+### Choosing a project
+
+The Projects panel registers a directory and pins which project every other
+panel shows. Pinning follows reads *and* writes together, so switching cannot
+leave the panels showing one project while a write lands in another. Unpinned,
+everything follows the directory the window was opened on.
 
 React and Vite are **build-time only**. The output is static HTML, CSS and one
 JavaScript file, served by the local API. Nothing is fetched from a CDN, so the
@@ -16,19 +34,21 @@ interface works with no network at all (§66).
 
 ## Panels
 
-| Panel | Shows |
+| Panel | Shows, and does |
 |---|---|
 | **Graph** | The engineering graph (§4) — the home screen. Workers, the core, memory, repository and verification, with what each one actually knows |
 | **Dashboard** | Version, mode, project count, receipts on disk, estimated context avoided, Git state, storage location |
-| **Context** | The context inspector (§68) — per request: task, budget, candidate vs final tokens, and **why each item was included or excluded** |
+| **Projects** | Registered projects; **register a directory** and pin which project the other panels follow |
+| **Context** | The context inspector (§68) — per request: task, budget, candidate vs final tokens, and **why each item was included or excluded**. **Builds context** for a task |
+| **Verify** | **Runs the project's own checks** and shows each one's status verbatim — a check that did not run is never drawn as a pass (§13) |
 | **Tokens** | The token monitor (§48, §49) — estimated context avoided over today, 7 days, 30 days or all time, aggregated by `@ctxd/stats` |
 | **Changes** | The change inspector (§71) — live Diff Firewall analysis of the working tree: verdict, expected scope, noise breakdown, flagged comments and every file with its reason, plus saved Change Receipts |
-| **Memory** | Project memory with FTS5 search, showing each memory's source and confidence |
-| **Tasks** | A kanban of tracked work by status |
-| **Resume** | The "what was I doing?" summary |
+| **Memory** | Project memory with FTS5 search, showing each memory's source and confidence. **Records a memory** |
+| **Tasks** | A kanban of tracked work by status. **Creates tasks and moves them between columns** |
+| **Resume** | The "what was I doing?" summary. **Starts a session and takes a checkpoint** |
 | **Activity** | The live event stream (§20) — what workers and ctxd are doing, as it happens. See [events.md](events.md) |
 | **Workers** | Who has worked on the project (§69): session state, live connection state, current and last task, last activity |
-| **Settings** | Configuration file, storage location and current values — read-only |
+| **Settings** | Configuration file, storage location and current values — read-only. Holds the **API token** a browser needs for writes |
 
 The context inspector is the panel that matters. It shows the candidate-to-final
 reduction as a proportion, lists every included item with its reason and every
@@ -198,7 +218,7 @@ positions — there is no force simulation to run. It is assembled by
 `GET /api/graph` rather than in React, for the same reason as everything else
 here: the interface renders a decision, it does not make one.
 
-There is no router (eleven panels are component state), no CSS framework, and no
+There is no router (thirteen panels are component state), no CSS framework, and no
 state library. Each would be a dependency added for tidiness rather than need.
 
 The interface performs no aggregation. The dashboard used to sum the receipt
@@ -210,8 +230,24 @@ the cap. It now reads `/api/stats`, which is `@ctxd/stats`, which is what
 
 ## Settings
 
-Read-only. The panel shows the configuration file's path, the storage directory
-and the current values, and says plainly that ctxd does not write configuration
-from the interface. `POST /api/config` does not exist — the file is the
-interface, and a browser-driven write path into it would be a larger surface
-than the feature is worth.
+**Configuration stays read-only.** The panel shows the configuration file's
+path, the storage directory and the current values, and says plainly that ctxd
+does not write configuration from the interface. `POST /api/config` does not
+exist — the file is the interface, and a browser-driven write path into it would
+be a larger surface than the feature is worth. That holds even though 2.1 gave
+the interface write routes for everything else.
+
+### The API token
+
+Mutating routes need the local token (§62), and the interface is served over
+HTTP like any other page, so it does not receive one automatically. The panel
+takes it once — from `ctxd ui --print-token` — and keeps it in `localStorage`.
+
+**In `ctxd desktop` there is nothing to paste.** The command hands the token to
+the Tauri shell, which injects it into its own webview before the page loads.
+That path exists precisely so the token never has to be *served*: anything that
+can reach the port still cannot ask for it. See [desktop.md](desktop.md).
+
+Only a hexadecimal token is injected. The value is interpolated into a script
+the webview runs, so a value able to close the string literal would be code
+execution — `only_a_hex_token_reaches_the_injected_script` covers that.

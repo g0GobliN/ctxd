@@ -5,11 +5,13 @@ sections 0–91). Section refs like `§22` point back at the spec.
 
 **Spec read: complete (all 92 sections).**
 
-**Current state:** 1.0 complete and verified — phases 1 through 10 (Tauri
-excepted, explicitly "eventually" in §67). 2.0 is under way: UI-0 through UI-9, UI-11
-and UI-12 are done. UI-10 (Tauri) is written but has never compiled on this
-machine — see its entry; it is the one thing not verified. Its phases are
-tracked at the end of this file. **616 tests passing, 0 failing**, seven context
+**Current state:** 1.0 complete and verified — phases 1 through 10. **2.0 is
+complete: UI-0 through UI-12 are all done and verified.** UI-10 (Tauri) was the
+last outstanding item; it now compiles, its unit tests pass, and the window
+opens on Windows 11 — see its entry. **2.1 adds writes to the interface**, so
+the panels can record memory, tasks, sessions and checkpoints rather than only
+display them. Its phases are
+tracked at the end of this file. **655 tests passing, 0 failing**, seven context
 benchmarks and three change benchmarks green. All 15 MCP tools are live, and MCP has no
 execution primitive at all — asserted by a test and a CI gate. ctxd ships no
 model and calls no network; the AI interfaces exist so one could be added.
@@ -67,7 +69,7 @@ without losing correctness · 3) reduce unnecessary AI code changes.
 | 7 | Worker management + verification + Diff Firewall | ✅ done |
 | 8 | React UI + local API | ✅ done |
 | 9 | Optimization + benchmarks | ✅ done |
-| 10 | Optional local AI / embeddings / Tauri | ✅ interfaces done · Tauri written, never compiled |
+| 10 | Optional local AI / embeddings / Tauri | ✅ AI interfaces done · Tauri compiled and verified |
 
 ---
 
@@ -756,7 +758,7 @@ Exit criteria:
 - [x] A zoom that would change nothing returns the same viewport, so a wheel
       spin at the limit does not re-render on every notch
 
-## UI-10 — Desktop shell — **partially done, blocked on this machine**
+## UI-10 — Desktop shell — **done, verified on Windows**
 
 - [x] `packages/desktop/` — Tauri 2 crate wrapping the same React interface.
       Not a rewrite and not a foundation: no ctxd logic lives in it
@@ -796,22 +798,75 @@ dependency, not in linking the final binary, so skipping the link does not skip
 it. Building the shell needs a system-level toolchain install — MinGW binutils
 or the MSVC build tools — which is not this project's change to make.
 
-**So UI-10 is not done, and must not be recorded as done.** Nothing in
-`packages/desktop/` has been compiled. The Rust source has never been
-type-checked, `is_loopback` has never had its unit tests executed, no binary has
-been produced, and no window has ever opened. Treat that source as *written but
-entirely unverified* — the first person with a toolchain should expect to fix
-compile errors in it. Ground rule §0/§13: never claim a feature works without
-running it.
+#### Toolchain install, in progress
 
-The TypeScript half is a different matter and is verified: `ctxd desktop` is
-built by `pnpm build`, type-checks, and its behaviour is covered by
-`tests/e2e/desktop.test.ts`.
+The MSVC build tools are being installed on this machine and the `gnu` blocker
+above is superseded by three further ones, each of which produced an error that
+named something other than its own cause. They are recorded here because the
+next person on Windows will meet all three, and in this order:
+
+1. **Git's `link.exe` shadows the MSVC linker.** With Git for Windows on PATH,
+   `cargo` resolves `link.exe` to `C:\Program Files\Git\usr\bin\link.exe` — GNU
+   coreutils `link`, not a linker. It fails with `link: extra operand ...` and
+   `Try 'link --help'`, which says nothing about PATH. Fixed by building from a
+   Visual Studio developer shell.
+2. **`cl.exe` appearing does not mean the toolchain is ready.** The MSVC
+   compiler is installed well before the Windows SDK. Waiting on the compiler
+   and building immediately gives `LNK1181: cannot open input file
+   'kernel32.lib'`. Wait for
+   `Windows Kits/10/Lib/*/um/x64/kernel32.lib` instead.
+3. **The SDK existing on disk does not mean it is registered.** With the VS
+   installer still running, `vcvars64.bat` reports `Environment initialized` but
+   builds a `LIB` containing the SDK's `ucrt\x64` and *not* its `um\x64` — so
+   `kernel32.lib` is still unreachable and the same `LNK1181` appears with the
+   correct linker. Wait for the installer processes to exit.
+
+A fourth trap sits underneath those three: **the installer's own exit code
+lied.** The bootstrapper reported `Installer failed with exit code: 1` and
+`vswhere` listed no product, on a toolchain that was in fact complete and
+working. The outcome had to be checked directly — `vcvars64.bat` producing a
+`LIB` that contains `um\x64` — rather than inferred from the exit status.
+
+None of this was a change to `packages/desktop/`.
+
+### Verified — the shell compiles, its tests pass, and the window opens
+
+Resolved on Windows 11 with `stable-x86_64-pc-windows-msvc`:
+
+```
+Finished `release` profile [optimized] target(s) in 7m 34s
+
+running 3 tests
+test tests::accepts_the_local_interface ... ok
+test tests::is_not_fooled_by_a_hostname_that_merely_contains_localhost ... ok
+test tests::refuses_anything_that_is_not_loopback ... ok
+test result: ok. 3 passed; 0 failed
+```
+
+`ctxd desktop --dir . --port 4317` then printed `ctxd api listening on
+http://127.0.0.1:4317`, `ctxd-desktop.exe` appeared in the process list, and the
+API answered `{"ok":true,"version":"0.1.0"}` on `/api/health` while `GET /`
+returned the built interface (`200`, `<title>ctxd</title>`, hashed asset
+bundle).
+
+**The prediction that this source would need fixing was wrong in the way worth
+recording: it compiled with no source errors at all.** The one real defect was
+outside the Rust — `packages/desktop/icons/icon.ico` did not exist, and
+`tauri-build` requires it to generate the Windows resource file. It is now
+generated from `img/logo.png`, letterboxed onto square canvases at 16/32/48/64/
+128/256 rather than stretched, because the source art is 448x399.
+
+`is_loopback` had never had its tests executed. They pass, including the two
+that matter for §62: `localhost.example.com` and `127.0.0.1.example.com` are
+both refused.
+
+Not verified on macOS or Linux — nobody has built it there.
 
 Exit criteria:
 
-- [ ] `ctxd` opens a local window — **unverified.** Needs MinGW binutils (for
-      the gnu toolchain) or the MSVC build tools, then
+- [x] `ctxd` opens a local window — **verified** on Windows 11 via
+      `ctxd desktop`, with the interface served from the local API. Requires the
+      MSVC build tools (or MinGW binutils for the gnu target), then
       `cargo build --release --manifest-path packages/desktop/Cargo.toml`
 - [x] The CLI keeps working independently — **verified**, and it is the half
       that matters more: the shell is packaging, so nothing about ctxd may
@@ -908,3 +963,267 @@ Exit criteria:
       unrelated: it imports the changed file and shares the task's vocabulary.
       Encoding the false alarm as acceptable would have taught the benchmark to
       accept exactly the noise that makes developers stop reading warnings
+
+## 2.1 — Writes in the interface — **done, verified**
+
+2.0 shipped an interface that could show everything and change nothing: sixteen
+read routes and one write. These routes close that gap. §27 already names the
+API among "the actual engineering interfaces" alongside the CLI, core and MCP,
+so this extends that surface rather than reversing a decision — what it does
+replace is `ui.md`'s "viewer, not a second brain" framing, which had hardened
+into a stricter rule than the specification ever stated.
+
+- [x] `POST /api/memory`, `POST /api/tasks`, `PATCH /api/tasks`,
+      `POST /api/session`, `POST /api/checkpoint` in
+      `packages/api/src/writes.ts`
+- [x] Every route calls the function the CLI calls — `saveMemory`,
+      `createTask`, `updateTask`, `startSession`, `createCheckpoint`. A second
+      copy of an authority rule is a second place it can be wrong, and the copy
+      that disagrees would be the one nobody tested
+- [x] An authority refusal from `saveMemory` is passed through as **409** with
+      its reason, exactly as MCP passes it to a worker. The interface never
+      works around a refusal
+- [x] `PATCH` carries only the fields that change; omitted fields are left
+      alone rather than round-tripped through the browser, so nothing the
+      interface never displayed can be overwritten by displaying it
+- [x] UI: memory composer, task create and per-card status select, API token
+      field in Settings
+
+### The token is not shipped to the page
+
+Mutating routes need the local token (§62). The interface is served over HTTP
+like any other page, so it does not receive the token automatically: the
+developer pastes it once from `ctxd ui --print-token` and it is kept in
+`localStorage`.
+
+Injecting it into the served HTML would remove that step and would also mean
+any local process able to `GET /` could read a credential that currently
+requires reading a `0600` file. The paste is the cheaper price.
+
+### Why the interface may write sources MCP refuses
+
+`ctx_memory_save` restricts a worker to `worker_statement` and `inferred`,
+because a worker cannot assert `verified_code`, `verified_git` or
+`accepted_decision` (§6). The caller here is not a worker: holding the token
+means being the developer at the keyboard, with the authority
+`ctxd memory add --source accepted_decision` already has from a terminal.
+Restricting the interface below the CLI would add no safety — only a reason to
+leave the window.
+
+### Bug found: writes resolved to the wrong project
+
+Reads resolve an absent project to *the first registered row*
+(`project-scope.ts`). That is harmless when it produces an empty dashboard and
+wrong when it files a decision: a server started as `ctxd desktop --dir
+some/repo` recorded memory against whichever project happened to be registered
+first. Caught by writing a memory through the running window and then failing to
+find it from the CLI — it had landed in a different project entirely.
+
+`projectFor` in `writes.ts` now resolves, in order: an explicit `project`, the
+project registered at the served directory, then the only registered project —
+and **refuses with 409** when several are registered and none match, rather than
+guessing. Serving a stale view is recoverable; writing project memory into the
+wrong project is not obviously noticed at all.
+
+The read routes still carry the original fallback. Changing read scoping is a
+separate decision with its own blast radius and has not been made here.
+
+### Bug found: every registered Windows project read as "not registered"
+
+Verifying the fix above surfaced a second one. `ctxd status` looks a project up
+by the **Git root**, and Git reports that with forward slashes even on Windows,
+while `detectProject` stores the native form. `findProjectByRoot` compared raw
+strings, so the lookup missed:
+
+```
+$ ctxd init
+Refreshed project   root  C:\Users\comwo\github_projects\ctxd
+$ ctxd status
+project   not registered (run ctxd init)
+```
+
+Both statements were produced seconds apart, and both were wrong together.
+
+`findProjectByRoot` now compares `resolve()`d paths, and falls back to scanning
+the (small) project list for rows written before the normalisation existed. Case
+is deliberately left alone: Windows paths are case-insensitive and POSIX paths
+are not, and lower-casing would make two genuinely different directories on
+Linux look like one project.
+
+The fix belongs in the repository rather than in `status`, because a path
+equality rule copied into three callers is a rule that will disagree with
+itself — `writes.ts` had just become the third caller.
+
+Exit criteria:
+
+- [x] Every write is reachable from the interface and lands in the same store
+      the CLI reads — verified against a running window, not only in tests
+- [x] The token gate covers all five routes. The first version of that test
+      passed while testing nothing: its helper took `token: string | undefined =
+      TOKEN`, and a default parameter treats an explicitly passed `undefined` as
+      absent, so the "no token" cases were sending the token. It uses `null` now
+- [x] Project scoping pinned by a test that serves one registered directory
+      while another is registered first
+- [x] **634 tests passing, 0 failing**
+
+## 2.2 — The desktop as the whole surface — **done, verified**
+
+The brief: *"not everyone loves CLI, so it's better to be in GUI — the desktop
+should be able to do everything."* 2.1 gave the interface writes; this closes
+the gap so a person who never opens a terminal is not a second-class user.
+
+- [x] `POST /api/projects` — `ctxd init` from the window. The Projects panel is
+      what makes the interface a starting point rather than a second screen for
+      something the terminal had to set up first
+- [x] `POST /api/verify` — the project's own checks
+- [x] `POST /api/handoff` — assemble a handoff, or move the work
+- [x] Context building wired into the Context panel; session start and
+      checkpoint into Resume; handoff into Workers
+- [x] Project switching, pinned in the interface and applied to reads **and**
+      writes together — switching must never leave the panels showing one
+      project while a write lands in another
+
+### The desktop window is not asked for a token
+
+Mutating routes require the local token (§62), and a browser tab is told it
+once in Settings. The desktop window is not asked at all: `ctxd desktop` passes
+it to the shell in `CTXD_UI_TOKEN`, and the shell injects it into its own
+webview before the page loads.
+
+What that avoids is serving it. Handing the token over HTTP would let anything
+able to `GET /` read a credential that today requires reading a `0600` file.
+This way the window can write and the port still gives the token to nobody.
+
+Only a hexadecimal value is injected, because it is interpolated into a script
+the webview runs — a value able to close the string literal would be code
+execution. `only_a_hex_token_reaches_the_injected_script` covers that with
+`'); alert(1); ('` among its cases. A missing or malformed token is not fatal:
+the window opens, reads work, and Settings still accepts one by hand.
+
+### `POST /api/verify` runs commands, and §63 still holds
+
+§63 forbids exposing shell execution **to a worker** through MCP, and the CI
+gate asserting `@ctxd/mcp` cannot import `@ctxd/verify` is untouched — nothing
+here is reachable from the MCP surface.
+
+What runs is not arbitrary. `discoverChecks` reads the project's own manifest
+and runs the scripts it already defines; the request picks among those by kind
+and cannot supply a command. Two limits are stated rather than hidden: the run
+is synchronous, so the interface waits, and `dryRun` reports what *would* run.
+
+Verified against the running window: a dry run discovered this project's own
+`typecheck`, `test` and `build`, reported each as `skipped`, and gave an overall
+`UNKNOWN` — a check that did not run is never a pass (§13).
+
+### Bug found: a directory that does not exist could be registered
+
+`detectProject` does not require its argument to exist. It reports "nothing
+detected" for a path with no manifests, and a missing path is indistinguishable
+from that — so the first version of `POST /api/projects` cheerfully created a
+project row for a directory that was not there, which nothing could ever index.
+The route now checks explicitly and answers `400`.
+
+Exit criteria:
+
+- [x] Registering a project, building context, recording memory, creating and
+      moving tasks, starting a session, checkpointing, handing off and verifying
+      are all reachable without a terminal
+- [x] The desktop window needs no token entry
+- [x] **655 tests passing, 0 failing**
+- [x] `ctxd export`/`import` and `ctxd doctor` remain CLI-only. `runDoctor`
+      lives in `@ctxd/cli` and `@ctxd/api` cannot import from it without
+      inverting the dependency; moving it into the core is the prerequisite and
+      has not been done
+
+## 2.3 — The agent loop — **done, verified**
+
+**This phase deliberately overrides the specification.** §4 lists "autonomous
+multi-agent orchestration" under *Not now*, §34 says *require approval when
+destructive*, and §43 says *do not add cloud services*. The project owner asked
+for a desktop that gives tasks to an AI and shows the whole flow. That decision
+is recorded here rather than quietly absorbed, because a spec that silently
+stops matching the code is worse than one that says where it was overruled.
+
+What survives from the original position, and why it still matters:
+
+- **ctxd opens no socket.** It starts Claude Code, which is authenticated by the
+  developer's own subscription. No API key is handled, stored or asked for, and
+  the `no-network` CI gate is untouched.
+- **ctxd is still not a worker.** It starts one. Swapping in another runnable
+  CLI is a new entry in `route.ts`, not a change to the core (§42).
+- **Edits are off by default.** Without `applyEdits` the worker reads and
+  reports; the working tree is untouched. §34's actual concern was silent
+  destruction, and that is still refused.
+- **Nothing is committed, reverted or accepted.** A run ends with a Change
+  Receipt a person still has to agree with (§50).
+
+- [x] `packages/agent/` — `route.ts` (who and which model), `runner.ts`
+      (starting Claude Code and reading its result), `run.ts` (the sequence)
+- [x] `GET /api/agent` — which workers can be started, and why not for the rest
+- [x] `POST /api/agent` — context → routing → worker → change review
+- [x] Agent panel, with routing reasons, tokens sent, worker result and the
+      Change Receipt when edits were enabled
+- [x] Events emitted at each stage, so the graph lights from a real run
+
+### Routing tells the truth about Cursor
+
+"Let ctxd decide which AI to use" implies several runnable workers. There is
+one. Claude Code has a headless mode; Cursor is an editor with none — it
+connects *to* ctxd over MCP and asks for context, and work reaches it through a
+handoff rather than by being started.
+
+So routing reports Cursor as unrunnable **with the reason**, rather than
+offering a menu where every option but one would fail, and rather than dropping
+a worker the developer pays for out of the picture entirely. When a second
+runner exists the choice becomes real without the interface changing.
+
+Model choice *is* a real decision and is made deterministically from the size of
+the context ctxd already built — §41 forbids calling a model to answer what a
+threshold answers, and an AI asked to pick an AI would cost a round trip, a
+token bill and determinism. Every choice carries its reason.
+
+### Bug found: the prompt could not go in argv
+
+The first version passed the composed prompt as a command-line argument. On
+Windows `claude` is a `.cmd` shim, so it must be spawned through a shell, and
+cmd.exe re-parsed the multi-line context — quotes, braces and backslashes and
+all. The observed failure was the worker **exiting 0 in 117ms having written
+nothing to stdout**, which reads like a crash and was actually a mangled command
+line.
+
+The prompt now goes on **stdin**, which has no quoting rules to get wrong.
+stdin is closed immediately after writing, because the worker waits for
+end-of-input before starting and would otherwise hang until the timeout.
+
+### Verified end to end
+
+Against the running desktop window, on this repository:
+
+```
+task     → "Name the file that decides which files enter a context build,
+            and the function that ranks them."
+context  → 1,561,289 candidate → 5,950 sent
+routing  → claude / sonnet
+            · Claude Code is the only worker ctxd can start
+            · Cursor not considered: an editor with no headless mode …
+            · context is mid-sized (5,950 estimated tokens)
+worker   → completed, 1 turn, 13s
+answer   → selectWithinBudget in packages/context/src/budget.ts
+            rankItems in packages/context/src/ranking.ts
+```
+
+Both answers are correct. **5,950 tokens of selected context were enough to
+answer accurately about a repository whose candidate context is 1.5 million** —
+which is the product thesis, demonstrated rather than asserted.
+
+One number worth keeping: a bare `claude -p` round trip on an empty directory
+reported 35,736 cached input tokens before any task context at all. That is the
+worker's own system prompt and tool definitions, and it is the next place this
+loop has fat to cut.
+
+Exit criteria:
+
+- [x] A task typed into the window is selected for, routed, run and reviewed
+- [x] Routing never claims a worker is runnable when it is not
+- [x] Edits require an explicit opt-in; the default run cannot alter the tree
+- [x] ctxd still makes no network calls of its own

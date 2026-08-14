@@ -50,7 +50,7 @@ nosniff` and `Cache-Control: no-store` — the API answers data, never markup.
 | `GET` | `/api/memory?q=&limit=` | — | FTS5 search, or a project's memories |
 | `GET` | `/api/tasks?project=` | — | Tasks |
 | `GET` | `/api/session?project=` | — | Last session and latest checkpoint |
-| `GET` | `/api/workers?project=` | — | Workers, with state derived from recorded sessions |
+| `GET` | `/api/workers?project=` | — | Workers: `state` from recorded sessions, plus `connection` from the event log — see [workers.md](workers.md) |
 | `GET` | `/api/config` | — | Configuration file path, storage directory and current values |
 | `GET` | `/api/resume?project=&dir=` | — | The "what was I doing?" summary |
 | `GET` | `/api/receipts/context?limit=` | — | Context Receipts, newest first |
@@ -61,9 +61,119 @@ nosniff` and `Cache-Control: no-store` — the API answers data, never markup.
 | `GET` | `/api/events?after=` | — | Live event stream (SSE) — see [events.md](events.md) |
 | `GET` | `/api/events/recent?limit=` | — | Recent events as JSON, newest first |
 | `POST` | `/api/context` | ✔ | Build context for a task; returns the receipt |
+| `POST` | `/api/memory` | ✔ | Record a memory — `title`, `content`, `type`, `source`, `importance`, `tags` |
+| `POST` | `/api/tasks` | ✔ | Create a task — `title`, `description`, `priority`, `status`, `worker`, `parentTask` |
+| `PATCH` | `/api/tasks` | ✔ | Update a task by `id`; omitted fields are left alone |
+| `POST` | `/api/session` | ✔ | Start a session — `worker`, `task`, `branch` |
+| `POST` | `/api/checkpoint` | ✔ | Record a checkpoint — `objective`, `completed`, `remaining`, `next`, `task`, `worker` |
+| `POST` | `/api/projects` | ✔ | Register a directory — `dir`, `index` |
+| `POST` | `/api/handoff` | ✔ | Assemble a handoff; with `to`, move the work — `to`, `from`, `task`, `note` |
+| `POST` | `/api/verify` | ✔ | Run the project's own checks — `only`, `dryRun`, `timeoutMs` |
+| `GET` | `/api/agent` | — | Which workers ctxd can start, and why not for the rest |
+| `POST` | `/api/agent` | ✔ | Run a task: context → routing → worker → change review — `task`, `budget`, `worker`, `model`, `applyEdits`, `timeoutMs` |
 
 `POST /api/context` requires the token because it writes a receipt, even though
 it changes no project data.
+
+## Writes
+
+Every mutating route calls the same function the CLI calls — `saveMemory`,
+`createTask`, `createCheckpoint`, `startSession`. None of them reimplements a
+rule, because a second copy of an authority rule is a second place it can be
+wrong, and the copy that disagrees would be the one nobody tested.
+
+A write names its project in the body as `project`, or in `?project=`, or not at
+all — in which case the only registered project is used. An id that does not
+resolve is a `404`, never a silent write to the default.
+
+### Authority is not bypassed
+
+`saveMemory` can refuse a write whose authority is too low to override what is
+already recorded. That refusal is passed through as **`409`** with its reason,
+the same answer a worker gets from MCP:
+
+```json
+{ "error": "refused: … — \"Never edit generated files\" has higher authority" }
+```
+
+### Why these routes accept sources MCP refuses
+
+`ctx_memory_save` restricts a worker to `worker_statement` and `inferred`,
+because a worker cannot assert `verified_code`, `verified_git` or
+`accepted_decision` (§6, [workers.md](workers.md)).
+
+The caller here is not a worker. Mutating routes require the local token, which
+is stored `0600` inside a `0700` directory and treated as a credential precisely
+because it authorises changes to project memory (§62). Holding it means being
+the developer at the keyboard — the same authority
+`ctxd memory add --source accepted_decision` already has from a terminal.
+
+Restricting the interface below the CLI would add no safety. It would only mean
+leaving the window to record a decision, and `@ctxd/memory`'s authority rules
+apply either way.
+
+### `POST /api/projects` reads a directory the caller names
+
+That is a real capability, and it is why the route is token-gated. What it
+records is metadata only: indexing stores path, size, mtime, hash, language and
+type, and never file content (§8). Registering a directory does not make its
+contents readable through the API.
+
+A path that does not exist is a `400`. `detectProject` does not require the
+directory to be there — a missing path looks identical to one with no manifests
+— so the route checks explicitly rather than registering a project nothing can
+ever index.
+
+### `POST /api/verify` runs commands, and that is not a §63 exception
+
+§63 forbids exposing shell execution **to a worker** through MCP, and a CI gate
+asserts `@ctxd/mcp` cannot even import `@ctxd/verify`. Both still hold: nothing
+here is reachable from the MCP surface.
+
+What runs is not arbitrary either. `discoverChecks` reads the project's own
+manifest and runs the typecheck, lint, test and build scripts it already
+defines. The request chooses among those by `kind`; it cannot supply a command.
+
+Two honest limits:
+
+- **It is synchronous.** A long test run holds the server until it finishes, so
+  the interface waits. `timeoutMs` bounds it.
+- **`dryRun` reports what would run** without running it, which is also the
+  right answer to "what does verification mean in this project?"
+
+### `POST /api/agent` starts an AI
+
+The one route that runs a model. It is a deliberate departure from the
+specification's *Never: autonomous multi-agent orchestration*, made by the
+project owner and recorded in [plan-tracker.md](plan-tracker.md) rather than
+absorbed silently.
+
+Four things bound it:
+
+- **ctxd opens no socket.** It starts Claude Code, authenticated by the
+  developer's own subscription. No API key is handled, stored or requested, and
+  the `no-network` CI gate is untouched.
+- **`applyEdits` is off by default.** Without it the worker reads and reports;
+  the working tree is not touched.
+- **Nothing is committed, reverted or accepted.** A run ends with a Change
+  Receipt (§50).
+- **The context is the same one `ctxd context` builds**, to the same budget,
+  producing the same auditable receipt.
+
+`GET /api/agent` reports runnable workers. Cursor appears with
+`available: false` and the reason — it is an editor with no headless mode, so
+work reaches it through `POST /api/handoff` rather than by being started. Model
+choice is deterministic, from the size of the built context (§41).
+
+A machine with no runnable worker answers `409`, not `500`: the request was
+understood, and the machine is why it cannot be carried out.
+
+### What still has no write route
+
+`ctxd export`/`import` and `ctxd doctor` remain CLI-only. `doctor` lives in
+`@ctxd/cli`, and `@ctxd/api` cannot import from it without inverting the
+dependency — moving `runDoctor` into the core is the prerequisite, and has not
+been done.
 
 Receipts are read from the filesystem rather than the database, because they are
 files by design — portable and readable without ctxd (§74).
