@@ -1,0 +1,12 @@
+# Benchmark diffs are data, not source.
+#
+# A unified diff means what its bytes say. Letting Git rewrite the line endings
+# on checkout changes the measurement: converting change.diff to CRLF turns the
+# small-change-sprawl scenario from 9 semantic lines into 2, because the
+# firewall's presentation/semantic split reads line endings as presentation —
+# correctly, since that is what §53 asks it to detect.
+#
+# So the benchmark would silently measure something different on a Windows
+# clone than on CI, which is the one thing a benchmark must never do.
+*.diff -text
+*.patch -text
