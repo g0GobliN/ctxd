@@ -13,6 +13,7 @@
     { "path": "./packages/verify" },
     { "path": "./packages/stats" },
     { "path": "./packages/ai" },
+    { "path": "./packages/agent" },
     { "path": "./packages/api" },
     { "path": "./packages/work" },
     { "path": "./packages/mcp" },

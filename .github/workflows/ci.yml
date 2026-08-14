@@ -129,10 +129,15 @@ jobs:
             echo "::error::MCP must not be able to spawn a process."
             exit 1
           fi
-          if grep -qE '"@ctxd/verify"' packages/mcp/package.json; then
-            echo "::error::MCP must not depend on @ctxd/verify."
-            exit 1
-          fi
+          # Controlled execution lives in two packages, and neither may be
+          # reachable from a worker: @ctxd/verify runs the project's checks,
+          # and @ctxd/agent starts an AI worker as a child process.
+          for forbidden in "@ctxd/verify" "@ctxd/agent"; do
+            if grep -qE "\"$forbidden\"" packages/mcp/package.json; then
+              echo "::error::MCP must not depend on $forbidden."
+              exit 1
+            fi
+          done
           echo "MCP exposes no execution capability."
 
   ci:

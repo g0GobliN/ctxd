@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@ctxd/agent':
+        specifier: workspace:*
+        version: link:packages/agent
       '@ctxd/ai':
         specifier: workspace:*
         version: link:packages/ai
@@ -66,6 +69,30 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/agent:
+    dependencies:
+      '@ctxd/core':
+        specifier: workspace:*
+        version: link:../core
+      '@ctxd/db':
+        specifier: workspace:*
+        version: link:../db
+      '@ctxd/diff':
+        specifier: workspace:*
+        version: link:../diff
+      '@ctxd/events':
+        specifier: workspace:*
+        version: link:../events
+      '@ctxd/firewall':
+        specifier: workspace:*
+        version: link:../firewall
+      '@ctxd/verify':
+        specifier: workspace:*
+        version: link:../verify
+      '@ctxd/work':
+        specifier: workspace:*
+        version: link:../work
+
   packages/ai:
     dependencies:
       '@ctxd/context':
@@ -77,6 +104,9 @@ importers:
 
   packages/api:
     dependencies:
+      '@ctxd/agent':
+        specifier: workspace:*
+        version: link:../agent
       '@ctxd/context':
         specifier: workspace:*
         version: link:../context
