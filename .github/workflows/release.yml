@@ -61,10 +61,10 @@ jobs:
           tag="${GITHUB_REF_NAME#v}"
           pkg="$(node -p "require('./packages/cli/package.json').version")"
           if [ "$tag" != "$pkg" ]; then
-            echo "::error::tag v$tag does not match ctxd@$pkg"
+            echo "::error::tag v$tag does not match @ctxd/cli@$pkg"
             exit 1
           fi
-          echo "tag v$tag matches ctxd@$pkg"
+          echo "tag v$tag matches @ctxd/cli@$pkg"
 
       - name: Pack every package (dry run)
         run: pnpm -r --filter "!ctxd-workspace" exec npm pack --dry-run

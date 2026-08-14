@@ -10,7 +10,8 @@
  */
 
 import { createReadStream, existsSync, statSync } from "node:fs";
-import { extname, join, normalize, resolve, sep } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, extname, join, normalize, resolve, sep } from "node:path";
 import type { ServerResponse } from "node:http";
 
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
@@ -109,12 +110,45 @@ export function serveStatic(
   return { served: true };
 }
 
-/** Where `vite build` puts the interface. */
+/**
+ * Where the built interface lives.
+ *
+ * Two layouts have to work, and only one of them was handled.
+ *
+ * In the repository, `packages/api/dist` and `packages/ui/dist` are siblings,
+ * so walking up two directories finds it. Installed from npm, the sibling walk
+ * lands on `node_modules/@ctxd/ui/dist` — which is correct *when the package
+ * manager hoists it there*, and wrong when it nests the dependency instead.
+ *
+ * Published 0.1.0 got this wrong in a more basic way: `@ctxd/ui` was not a
+ * declared dependency of `@ctxd/api` at all, because the interface is found by
+ * path rather than imported. Nothing installed it, so `ctxd ui` answered
+ * `/api/health` and served 404 for the interface itself. A path-based
+ * dependency is still a dependency, and the manifest has to say so.
+ *
+ * Resolution is now asked of Node rather than assumed from the directory
+ * layout, with the sibling walk kept as the fallback that makes a source
+ * checkout work before anything is installed.
+ */
 export function defaultUiRoot(fromUrl: string): string {
-  // packages/api/dist/static.js → packages/ui/dist
   const here = new URL(".", fromUrl).pathname;
   const decoded = decodeURIComponent(
     process.platform === "win32" ? here.replace(/^\//, "") : here,
   );
-  return join(decoded, "..", "..", "ui", "dist");
+  const sibling = join(decoded, "..", "..", "ui", "dist");
+
+  // The repository layout wins when it is present: a developer running from a
+  // checkout should see the interface they just built, not one installed from
+  // node_modules by something else.
+  if (existsSync(join(sibling, "index.html"))) return sibling;
+
+  try {
+    const manifest = createRequire(fromUrl).resolve("@ctxd/ui/package.json");
+    return join(dirname(manifest), "dist");
+  } catch {
+    // Not installed and not a sibling. Returning the sibling path keeps the
+    // caller's "does this exist?" check meaningful and its error message
+    // pointing somewhere real.
+    return sibling;
+  }
 }

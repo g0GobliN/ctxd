@@ -17,6 +17,9 @@ importers:
       '@ctxd/api':
         specifier: workspace:*
         version: link:packages/api
+      '@ctxd/cli':
+        specifier: workspace:*
+        version: link:packages/cli
       '@ctxd/context':
         specifier: workspace:*
         version: link:packages/context
@@ -62,9 +65,6 @@ importers:
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.1
-      ctxd:
-        specifier: workspace:*
-        version: link:packages/cli
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -134,6 +134,9 @@ importers:
       '@ctxd/stats':
         specifier: workspace:*
         version: link:../stats
+      '@ctxd/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@ctxd/utils':
         specifier: workspace:*
         version: link:../utils

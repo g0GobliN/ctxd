@@ -21,7 +21,7 @@
     "@ctxd/agent": "workspace:*",
     "@ctxd/ai": "workspace:*",
     "@ctxd/api": "workspace:*",
-    "ctxd": "workspace:*",
+    "@ctxd/cli": "workspace:*",
     "@ctxd/context": "workspace:*",
     "@ctxd/core": "workspace:*",
     "@ctxd/db": "workspace:*",

@@ -18,7 +18,7 @@ Local-first engineering memory that gives Claude Code, Cursor and friends the
 ## Install
 
 ```bash
-npm install -g ctxd
+npm install -g @ctxd/cli
 ctxd doctor
 ```
 

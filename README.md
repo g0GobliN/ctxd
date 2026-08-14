@@ -78,7 +78,7 @@ has a stated reason. Not compression: **selection you can audit**.
 Requires **Node.js 24+**.
 
 ```bash
-npm install -g ctxd
+npm install -g @ctxd/cli
 ctxd doctor
 ```
 
@@ -107,7 +107,7 @@ To put `ctxd` on your PATH from a source checkout:
 
 ```bash
 # a) link it globally (needs "pnpm setup" once, to create the global bin dir)
-pnpm --filter ctxd link --global
+pnpm --filter @ctxd/cli link --global
 
 # b) or add an alias to your shell profile
 alias ctxd="node /absolute/path/to/ctxd/packages/cli/dist/index.js"

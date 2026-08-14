@@ -1,6 +1,6 @@
 {
-  "name": "ctxd",
-  "version": "0.1.0",
+  "name": "@ctxd/cli",
+  "version": "0.1.1",
   "description": "A context firewall for AI coding agents — local-first engineering memory",
   "keywords": [
     "ai",

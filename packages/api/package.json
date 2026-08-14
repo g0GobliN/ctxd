@@ -1,6 +1,6 @@
 {
   "name": "@ctxd/api",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "ctxd api",
   "license": "MIT",
   "author": "the ctxd authors",
@@ -41,6 +41,7 @@
     "@ctxd/memory": "workspace:*",
     "@ctxd/project": "workspace:*",
     "@ctxd/stats": "workspace:*",
+    "@ctxd/ui": "workspace:*",
     "@ctxd/utils": "workspace:*",
     "@ctxd/verify": "workspace:*",
     "@ctxd/work": "workspace:*"
