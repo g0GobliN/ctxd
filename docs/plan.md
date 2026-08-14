@@ -1,2785 +1,1482 @@
-# ctxd — MASTER ENGINEERING SPECIFICATION
-# Version 1.0
+# ctxd 2.0 — MASTER IMPLEMENTATION PROMPT
+# Existing Repository Upgrade
 # Status: FINAL
-# Build from zero.
+#
+# IMPORTANT:
+# This is NOT a greenfield project.
+# ctxd 1.0 already exists in this repository.
+#
+# DO NOT rebuild existing functionality.
+# DO NOT replace working architecture unnecessarily.
+# DO NOT restart from Phase 1.
+#
+# Your job is to AUDIT the existing repository,
+# understand what is already implemented,
+# then build ctxd 2.0 on top of it.
 
 ============================================================
-0. INSTRUCTIONS TO THE IMPLEMENTING AI
-============================================================
-
-You are responsible for implementing this project from zero.
-
-Project name:
-
-ctxd
-
-Do not ask me to restate requirements contained in this document.
-
-Do not skip phases.
-
-Do not silently simplify important requirements.
-
-Do not build fake functionality.
-
-Do not claim a feature works unless you actually tested it.
-
-Before implementing each phase:
-
-1. Inspect the current repository.
-2. Understand the current implementation.
-3. Make a concise implementation plan.
-4. Implement the smallest correct change.
-5. Run relevant tests.
-6. Run typecheck.
-7. Run lint if configured.
-8. Verify actual behavior.
-9. Update documentation.
-10. Only then proceed to the next phase.
-
-If an implementation decision is not explicitly specified:
-
-- choose the simplest robust solution
-- preserve local-first architecture
-- avoid unnecessary dependencies
-- avoid cloud services
-- avoid unnecessary AI calls
-- keep provider independence
-- prefer deterministic algorithms
-- preserve original data
-- optimize for correctness over superficial token reduction
-
-Do not build future features prematurely.
-
-The project should become progressively more capable while keeping
-the core small, understandable, testable, and deterministic.
-
-============================================================
-1. WHAT IS ctxd?
+1. WHAT ctxd IS
 ============================================================
 
 ctxd is a:
 
-LOCAL-FIRST AI ENGINEERING MANAGER
+LOCAL-FIRST ENGINEERING MEMORY
 +
 CONTEXT FIREWALL
 +
 TOKEN OPTIMIZER
 +
-PERSISTENT ENGINEERING MEMORY
-+
 AI WORKER MANAGER
 +
-DIFF FIREWALL
+CHANGE/DESCRIPTION NOISE FILTER
++
+DEVELOPER CONTROL CENTER
 
-It is NOT primarily an AI chatbot.
+It is NOT:
 
-It is NOT another IDE.
+- another chatbot
+- another IDE
+- a cloud SaaS
+- a replacement for Claude
+- a replacement for Cursor
+- a coding model
 
-It is NOT another coding agent.
+Claude and Cursor are workers.
 
-It is NOT a cloud SaaS.
+ctxd is the engineering layer between:
 
-It is NOT dependent on one AI provider.
+developer
+repository
+memory
+tasks
+Git
+AI workers
+verification
 
-The human developer is the CTO.
-
-Claude Code, Cursor, and future AI systems are workers.
-
-ctxd is the persistent engineering layer between:
-
-- the developer
-- the repository
-- project knowledge
-- engineering memory
-- tasks
-- Git
-- AI workers
-
-The fundamental architecture is:
-
-Human
-  ↓
-ctxd
-  ↓
-Context Firewall
-  ↓
-Minimum useful context
-  ↓
-Claude / Cursor / other worker
-  ↓
-Code changes
-  ↓
-Diff Firewall
-  ↓
-Verification
-  ↓
-Persistent memory
-  ↓
-Checkpoint / handoff
-
-The most important principle is:
+Core principle:
 
 STORAGE IS CHEAP.
 MODEL CONTEXT IS EXPENSIVE.
 
-ctxd may store large amounts of local information.
+Therefore:
 
-It should provide only the minimum useful information required for
-a particular task.
+Store as much useful engineering knowledge locally as necessary.
 
-But:
+Send only the minimum useful context to AI workers.
 
-MINIMUM CONTEXT DOES NOT MEAN MINIMUM INFORMATION.
-
-The actual objective is:
-
-MINIMUM USEFUL CONTEXT
-+
-MAXIMUM RELEVANT INFORMATION
-+
-MINIMUM NECESSARY CHANGE
-+
-MINIMUM USEFUL EXPLANATION
-+
-MAXIMUM CORRECTNESS
+Every token sent to an AI worker should have a reason.
 
 ============================================================
-2. CORE DESIGN PHILOSOPHY
+2. CRITICAL: THIS REPOSITORY ALREADY HAS ctxd 1.0
 ============================================================
 
-Every token sent to an external model must have a reason to exist.
+Before changing ANYTHING:
 
-Every line changed by an AI worker should have a reason to exist.
+AUDIT THE ENTIRE REPOSITORY.
 
-Every explanation produced by an AI worker should have a reason to exist.
+Do not assume the specification describes an empty repository.
 
-ctxd therefore optimizes three things:
+Inspect:
 
-1. INPUT CONTEXT
-2. CODE CHANGE SURFACE
-3. OUTPUT EXPLANATION
+packages/
+docs/
+tests/
+scripts/
+database/schema
+API routes
+UI
+MCP
+CLI
+diff engine
+verification
+stats
+worker logic
+session events
+task system
+memory system
+Git integration
 
-The three optimization layers are:
+Read the existing:
 
-                ┌──────────────────────┐
-                │   PROJECT KNOWLEDGE  │
-                └──────────┬───────────┘
-                           ↓
-                ┌──────────────────────┐
-                │   CONTEXT FIREWALL   │
-                │                      │
-                │ retrieve             │
-                │ rank                 │
-                │ deduplicate          │
-                │ compress             │
-                │ budget               │
-                └──────────┬───────────┘
-                           ↓
-                    AI WORKER
-                           ↓
-                ┌──────────────────────┐
-                │    DIFF FIREWALL     │
-                │                      │
-                │ detect over-editing  │
-                │ detect noise         │
-                │ analyze scope        │
-                │ verify changes       │
-                └──────────┬───────────┘
-                           ↓
-                ┌──────────────────────┐
-                │ WORKER OUTPUT FILTER │
-                │                      │
-                │ concise report       │
-                │ no repeated context  │
-                │ no unnecessary text  │
-                └──────────────────────┘
+README
+architecture documentation
+API documentation
+UI documentation
+plan tracker
+database schema
+package manifests
+tests
 
-============================================================
-3. PRIMARY GOALS
-============================================================
+Find what is already implemented.
 
-Eventually ctxd must provide:
+Create an internal implementation matrix:
 
-1. Persistent local project memory.
-2. Intelligent context retrieval.
-3. Token-aware context construction.
-4. Context deduplication.
-5. Context ranking.
-6. Context compression.
-7. Project/file relevance detection.
-8. Git awareness.
-9. Task management.
-10. Session management.
-11. Checkpoints.
-12. Cross-agent handoffs.
-13. Claude Code integration.
-14. Cursor integration.
-15. MCP access.
-16. Verification of worker changes.
-17. Token/context statistics.
-18. Context Receipts.
-19. Change Receipts.
-20. Local web dashboard.
-21. Worker management.
-22. AI over-edit detection.
-23. Architecture/rule drift detection.
-24. Eventually an "AI developer under me" workflow.
+FEATURE | EXISTS | PARTIAL | MISSING | FILES | TESTS
 
-The core must remain useful without cloud services.
+At minimum audit:
 
-============================================================
-4. DO NOT BUILD THESE INITIALLY
-============================================================
-
-Do NOT initially build:
-
-- cloud backend
-- user accounts
-- SaaS billing
-- telemetry
-- mandatory external AI
-- vector database
-- embeddings
-- autonomous multi-agent system
-- Electron
-- complex desktop packaging
-- browser extension
-- full IDE
-- AST-heavy code intelligence
-- provider-specific hardcoding
-- large local AI model
-- deployment automation
-- unrestricted shell execution
-
-These may be future features.
-
-The first priority is the Context Firewall.
-
-The second priority is proving that ctxd can reduce unnecessary
-AI context without reducing task correctness.
-
-The third priority is reducing unnecessary AI-generated code changes.
-
-============================================================
-5. ARCHITECTURE
-============================================================
-
-Conceptual architecture:
-
-                     HUMAN
-                       │
-                       ▼
-                ┌─────────────┐
-                │    ctxd     │
-                │             │
-                │ Engineering │
-                │   Manager   │
-                └──────┬──────┘
-                       │
-      ┌────────────────┼────────────────┐
-      │                │                │
-      ▼                ▼                ▼
-    CLI               MCP            HTTP API
-      │                │                │
-      │                │                ▼
-      │                │             React UI
-      │                │
-      ▼                ▼
-  Developer       Claude / Cursor
-  terminal          workers
-                       │
-                       ▼
-                      Git
-                       │
-                       ▼
-                  Repository
-
-Important:
-
-MCP is the bridge between ctxd and AI workers.
-
-ctxd must NOT depend directly on Claude internals.
-
-ctxd must NOT depend directly on Cursor internals.
-
-Claude and Cursor are replaceable workers.
-
-The core must remain provider-independent.
-
-============================================================
-6. TECHNOLOGY
-============================================================
-
-Use:
-
-- TypeScript
-- Node.js 24+
-- ESM
-- strict TypeScript
-- pnpm
-- SQLite
-- better-sqlite3
-- SQLite WAL
-- SQLite foreign keys
-- SQLite FTS5
-- React for future UI
-- local HTTP API for future UI
-- Node built-in parseArgs where practical
-
-Do not add unnecessary dependencies.
-
-Use established libraries only when they clearly reduce complexity.
-
-Prefer standard Node APIs where practical.
-
-============================================================
-7. INITIAL MONOREPO
-============================================================
-
-Do NOT create 12 packages immediately.
-
-Start with five:
-
-ctxd/
-├── packages/
-│   ├── core/
-│   │   └── src/
-│   │       ├── config.ts
-│   │       ├── paths.ts
-│   │       ├── logger.ts
-│   │       └── types.ts
-│   │
-│   ├── db/
-│   │   └── src/
-│   │       ├── connection.ts
-│   │       ├── migrations.ts
-│   │       └── schema.ts
-│   │
-│   ├── context/
-│   │   └── src/
-│   │       ├── types.ts
-│   │       ├── estimator.ts
-│   │       ├── ranking.ts
-│   │       ├── dedup.ts
-│   │       ├── budget.ts
-│   │       ├── compression.ts
-│   │       ├── firewall.ts
-│   │       └── receipt.ts
-│   │
-│   ├── cli/
-│   │   └── src/
-│   │       ├── index.ts
-│   │       └── commands/
-│   │           ├── doctor.ts
-│   │           ├── status.ts
-│   │           └── context.ts
-│   │
-│   └── utils/
-│       └── src/
-│
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   ├── e2e/
-│   └── fixtures/
-│
-├── docs/
-├── scripts/
-├── package.json
-├── pnpm-workspace.yaml
-└── tsconfig.base.json
-
-Later add only when justified:
-
+- context engine
+- context receipts
 - memory
 - search
-- git
+- project indexing
+- Git
+- tasks
+- sessions
+- checkpoints
+- handoffs
 - workers
-- mcp
-- api
-- ui
-
-Do not split packages merely for theoretical architecture purity.
-
-============================================================
-8. LOCAL STORAGE
-============================================================
-
-Default:
-
-~/.ctxd/
-
-Structure:
-
-~/.ctxd/
-├── config.json
-├── ctxd.db
-├── projects/
-├── archive/
-├── snapshots/
-├── context_receipts/
-├── change_receipts/
-├── logs/
-├── cache/
-└── exports/
-
-Do not assume the directory exists.
-
-Create it safely when required.
-
-Allow configurable storage location.
-
-Never hardcode a user-specific absolute path.
-
-============================================================
-9. CONFIGURATION
-============================================================
-
-Global config:
-
-~/.ctxd/config.json
-
-Initial defaults:
-
-{
-  "mode": "balanced",
-  "context": {
-    "safetyMarginTokens": 2000,
-    "outputReserveTokens": 5000
-  },
-  "storage": {
-    "directory": "~/.ctxd"
-  },
-  "ui": {
-    "host": "127.0.0.1",
-    "port": 4317
-  },
-  "logging": {
-    "level": "info"
-  },
-  "workers": {
-    "defaultOutputMode": "minimal"
-  }
-}
-
-Validate configuration.
-
-Supported modes:
-
-cheap
-balanced
-full
-
-cheap:
-Aggressive optimization.
-
-balanced:
-Normal optimization.
-
-full:
-Preserve more context.
-
-No secrets should be stored in configuration.
-
-============================================================
-10. DATABASE
-============================================================
-
-Use better-sqlite3.
-
-Verify FTS5 availability.
-
-Enable:
-
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
-
-Phase 1 requires only:
-
-meta
-
-The meta table tracks schema version.
-
-Do not build a giant migration framework.
-
-Use a simple versioned migration mechanism.
-
-Never silently modify schema.
-
-Later tables:
-
-projects
-memories
-decisions
-tasks
-task_steps
-sessions
-snapshots
-messages
-files
-file_chunks
-git_commits
-git_changes
-worker_runs
-context_requests
-context_items
-token_usage
-rules
-bugs
-experiments
-change_receipts
-
-Use prepared SQL statements.
-
-============================================================
-11. CLI
-============================================================
-
-Use Node's:
-
-node:util parseArgs
-
-Initial commands:
-
-ctxd --help
-
-ctxd doctor
-
-ctxd status
-
-ctxd context
-
-Later:
-
-ctxd init
-ctxd search
-ctxd memory
-ctxd task
-ctxd checkpoint
-ctxd compact
-ctxd handoff
-ctxd resume
-ctxd review
-ctxd decisions
-ctxd bugs
-ctxd session
-ctxd stats
-ctxd efficiency
-ctxd export
-ctxd import
-ctxd ui
-
-Every command must support:
-
---help
-
-============================================================
-12. PHASE 1 — FOUNDATION
-============================================================
-
-Deliver:
-
-1. pnpm monorepo
-2. strict TypeScript
-3. ESM
-4. CLI skeleton
-5. configuration loader
-6. data directory
-7. SQLite connection
-8. initial migration
-9. logging
-10. ctxd doctor
-11. ctxd status
-12. tests
-13. architecture documentation
-
-Do NOT build:
-
-- UI
 - MCP
-- embeddings
-- memory engine
-- worker manager
-- cloud
-
-Target:
-
-less than one focused day.
-
-============================================================
-13. ctxd doctor
-============================================================
-
-Check:
-
-- Node version
-- SQLite availability
-- FTS5 availability
-- global ctxd directory
+- API
+- React UI
+- diff firewall
+- over-edit detection
+- comment bloat detection
+- noise detection
+- scope analysis
+- verification
+- token statistics
+- session_events
 - configuration
-- database
-- logging
-- Git availability
+- security
+- local storage
+
+Do NOT rebuild existing functionality.
+
+Extend existing services.
+
+Reuse existing types.
+
+Reuse existing database tables.
+
+Reuse existing API routes.
+
+Reuse existing UI components.
+
+Reuse existing diff/verification logic.
+
+Only introduce new abstractions when the current architecture genuinely cannot support the feature.
+
+============================================================
+3. AUDIT RESULT — ALREADY PERFORMED
+============================================================
+
+The §2 audit has been done. These are findings from the actual
+repository, not assumptions. Re-verify anything that looks stale, but
+do not redo the audit from zero.
+
+IMPLEMENTATION MATRIX
+
+FEATURE                  STATE     WHERE
+context engine           EXISTS    packages/context
+context receipts         EXISTS    packages/context/src/receipt.ts
+memory + FTS5 search     EXISTS    packages/memory
+project indexing / Git   EXISTS    packages/project
+tasks (incl. subtasks)   EXISTS    packages/work/src/tasks.ts
+sessions / checkpoints   EXISTS    packages/work
+handoffs                 EXISTS    packages/work/src/checkpoints.ts
+MCP (15 tools)           EXISTS    packages/mcp
+local HTTP API           EXISTS    packages/api/src/routes.ts
+React UI (8 panels)      EXISTS    packages/ui/src
+over-edit detection      EXISTS    packages/diff/src/overedit.ts
+comment analysis         EXISTS    packages/diff/src/comments.ts
+noise detection          EXISTS    packages/diff/src/noise.ts
+scope analysis           EXISTS    packages/diff/src/scope.ts
+change receipts          EXISTS    packages/diff/src/receipt.ts
+verification             EXISTS    packages/verify
+token statistics         EXISTS    packages/stats (supports `since`)
+schema migrations        EXISTS    packages/db/src/migrations.ts
+
+live event transport     MISSING   no SSE, WebSocket or polling anywhere
+/api/stats               MISSING   UI sums receipts client-side today
+                                   (packages/ui/src/panels.tsx:22)
+events table             MISSING   see §7 — session_events cannot hold it
+worker on ContextReceipt MISSING   see §16 — blocks per-worker context
+live worker connection   MISSING   see §6 — derived from session rows only
+verification runs table  MISSING   see §21 — freshness comes from receipts
+Tauri shell              MISSING   deliberately last (§26)
+
+Everything marked EXISTS is reused, not rebuilt. The 2.0 delta is the
+MISSING rows plus the graph itself.
+
+CORRECT ALSO:
+
+docs/api.md says the React interface "is not yet built". It is built.
+That file's route table also omits /api/workers and /api/config, both
+of which exist. Fix before planning against it (§29).
+
+============================================================
+4. THE REAL ctxd 2.0 GOAL
+============================================================
+
+The major new experience is:
+
+A developer opens ctxd.
+
+Instead of seeing a traditional dashboard first,
+
+they see the ENGINEERING GRAPH.
 
 Example:
 
-ctxd doctor
+                         ┌─────────────┐
+                         │   WORKER    │
+                         │    LOCAL    │
+                         └──────┬──────┘
+                                │
+                                │
+┌──────────────┐         ┌──────▼──────┐         ┌──────────────┐
+│   CURSOR     │────────▶│             │◀────────│    CLAUDE    │
+│   WORKER     │         │    ctxd     │         │    WORKER    │
+└──────────────┘         │    CORE     │         └──────────────┘
+                         │             │
+                         │ Context     │
+                         │ Memory      │
+                         │ Tasks       │
+                         │ Git         │
+                         │ Verification│
+                         │ Token       │
+                         └──────┬──────┘
+                                │
+                                │
+                         ┌──────▼──────┐
+                         │    REPO     │
+                         │    / GIT    │
+                         └─────────────┘
 
-✓ Node 24.x
-✓ SQLite
-✓ FTS5
-✓ Database
-✓ Configuration
-✓ Logging
-✓ Git
+The graph is the HOME SCREEN.
 
-Failures must explain how to fix them.
+ctxd is the central node.
 
-Never claim a check passed unless it was actually performed.
+Workers connect to ctxd.
 
-============================================================
-14. ctxd status
-============================================================
+Repository connects to ctxd.
 
-Show:
+Memory connects to ctxd.
 
-- ctxd version
-- config path
-- data directory
-- mode
-- database status
-- current project if available
-- Git repository if available
+Context flows through ctxd.
 
-It must work outside a ctxd-initialized project.
+The graph should visually communicate:
 
-============================================================
-15. PHASE 1.5 — CONTEXT ENGINE
-============================================================
-
-This is the most important early milestone.
-
-Implement:
-
-ctxd context \
-  --task "Fix Stripe webhook idempotency" \
-  --dir ./tests/fixtures/project \
-  --budget 10000
-
-The Context Engine must also be exposed as a pure function for tests.
-
-============================================================
-16. BENCHMARK FIXTURE
-============================================================
-
-Create a realistic fixture repository containing approximately:
-
-- 20 source files
-- 5 documentation files
-- 3 previous session files
-- 5 memory records
-- project metadata
-- relevant Stripe/idempotency files
-- irrelevant files
-- duplicate documentation
-- different priority memories
-- realistic file timestamps
-
-The candidate context must be:
-
->50,000 estimated tokens.
-
-The exact number does not need to be exactly 50,000.
-
-Tests must assert:
-
-candidate tokens > 50,000
+WHO IS CONNECTED
+WHAT IS ACTIVE
+WHAT IS HAPPENING
+WHERE CONTEXT IS FLOWING
+HOW MUCH CONTEXT IS BEING USED
+WHICH WORKER IS WORKING
+WHETHER A WORKER IS WAITING
+WHETHER A WORKER HAS FAILED
+WHETHER ctxd is currently building context
+WHETHER verification is running
 
 ============================================================
-17. ContextItem
+5. GRAPH DESIGN
 ============================================================
 
-Define:
+Use the existing React UI.
 
-id
-path
-content
-tokenCount
-tokenCountType
-type
-priority
-mtime
-hash
-score
-relevance
-reason
+Do NOT create a second UI application.
 
-Types:
+Do NOT create a separate frontend unless absolutely necessary.
 
-source
-documentation
-memory
-session
-project
-configuration
-git
-other
+For V1 of the graph:
 
-============================================================
-18. TOKEN ESTIMATION
-============================================================
+Use hand-written SVG + React.
 
-Do NOT pretend to know exact provider token counts.
+Do NOT immediately add React Flow or another large graph framework.
 
-Define:
+Reason:
 
-interface TokenEstimator {
-  count(text: string): number;
-  readonly accuracy: "estimated" | "exact";
-}
+The initial graph contains only a small number of important nodes.
 
-V1 uses a deterministic heuristic.
+The graph should remain lightweight.
 
-Mark:
+Nodes:
 
-token_count_estimation: "estimated"
+CENTER:
 
-Later provider-specific tokenizers can be plugged in.
+ctxd Core
 
-Never claim estimated savings are exact billing savings.
+Possible surrounding nodes:
 
-============================================================
-19. CANDIDATE COLLECTION
-============================================================
+Claude
+Cursor
+Local Worker
+Repository
+Git
+Memory
+Context Engine
+Verification
 
-Pipeline:
+The graph should support:
 
-1. Walk directory.
-2. Respect ignore rules.
-3. Read eligible files.
-4. Classify files.
-5. Estimate tokens.
-6. Detect priority metadata.
-7. Calculate hashes.
-8. Collect timestamps.
-9. Create ContextItems.
+- drag
+- pan
+- zoom
+- collapse
+- node selection
+- node details
+- connection visualization
+- live status
+- animated activity
 
-No network calls.
-
-No LLM.
-
-No embeddings.
-
-============================================================
-20. DEDUPLICATION
-============================================================
-
-Exact duplicates:
-
-Use content hashes.
-
-Near duplicates:
-
-1. normalize whitespace
-2. normalize line endings
-3. generate deterministic shingles/signatures
-4. calculate similarity
-
-If similarity >0.90:
-
-Treat as near duplicate.
-
-Keep strongest version based on:
-
-1. explicit priority
-2. P0/P1
-3. recency
-4. source quality
-
-Never delete original information.
-
-Only exclude weaker copies from current context.
-
-============================================================
-21. PRIORITY MODEL
-============================================================
-
-P0 — Mandatory
-P1 — Current
-P2 — Relevant
-P3 — Background
-P4 — Archive
-
-P0 examples:
-
-- explicit user rules
-- security constraints
-- active task
-- critical architecture decisions
-
-P1:
-
-- current files
-- recent errors
-- recent changes
-- active task details
-
-P2:
-
-- related architecture
-- related bugs
-- related decisions
-
-P3:
-
-- general project information
-
-P4:
-
-- old sessions
-- historical context
-
-Budget pressure removes:
-
-P4 before P3
-P3 before P2
-P2 before P1
-
-Never sacrifice required P0/P1 context merely to improve compression.
-
-============================================================
-22. DETERMINISTIC RELEVANCE RANKING
-============================================================
-
-Use configurable weights.
-
-Initial:
-
-keyword = 3.0
-fileType = 1.5
-priority = 2.0
-recency = 0.5
-path = 2.0
-tokenCost = 0.1
-
-Conceptually:
-
-score =
-  keywordMatch(task, content) * keywordWeight
-  + pathRelevance(task, path) * pathWeight
-  + fileTypeScore(type) * fileTypeWeight
-  + priorityScore(priority) * priorityWeight
-  + recencyScore(mtime) * recencyWeight
-  - tokenCostPenalty(tokens) * tokenCostWeight
-
-These values are experimental.
-
-Do not claim they are scientifically optimal.
-
-Make them configurable.
-
-Normalize:
-
-- case
-- punctuation
-- whitespace
-
-Ignore obvious stop words.
-
-Use term frequency/relevance.
-
-Path names matter.
+Connections should visually show direction.
 
 Example:
 
-Task:
-
-Stripe webhook idempotency
-
-Higher relevance:
-
-payment/webhook.ts
-payment/idempotency.ts
-stripe/adapter.ts
-
-Lower relevance:
-
-camera/device.ts
-signage/qr.ts
-
-No embeddings.
-
-No LLM.
-
-============================================================
-23. CONTEXT BUDGET
-============================================================
-
-Example:
-
-10,000 tokens.
-
-Do NOT simply truncate the final string.
-
-Algorithm:
-
-1. collect candidates
-2. deduplicate
-3. rank
-4. identify mandatory P0/P1
-5. reserve budget
-6. include highest-value items
-7. compress large items
-8. recalculate token count
-9. continue until budget is reached
-10. verify final total <= budget
-
-The final context MUST be <= configured budget.
-
-Important:
-
-50k → 10k is not the definition of success.
-
-The true objective is:
-
-MINIMUM USEFUL CONTEXT.
-
-A 2k context that loses critical architecture is worse than a 9k
-context that preserves it.
-
-Optimize for correctness.
-
-============================================================
-24. DETERMINISTIC COMPRESSION
-============================================================
-
-V1 compression must NOT call an LLM.
-
-Source files:
-
-- preserve imports where useful
-- preserve exports
-- preserve function/class signatures
-- preserve relevant sections
-- preserve surrounding context
-- omit clearly unrelated sections
-
-Markdown:
-
-- preserve headings
-- preserve important sections
-- preserve relevant paragraphs
-- remove obvious boilerplate where safe
-
-Session logs:
-
-- use structured summaries if available
-- otherwise omit low-priority sessions
-
-Do not implement AST-heavy chunking yet.
-
-V1:
-
-- headings
-- exports
-- signatures
-- logical sections
-- regex-based extraction
-
-AST-aware chunking is a future optimization.
-
-Never modify the original file.
-
-Compression only changes the context representation.
-
-============================================================
-25. CONTEXT RECEIPT
-============================================================
-
-Every context build produces a Context Receipt.
-
-Produce:
-
-1. JSON
-2. human-readable text
-
-Store:
-
-~/.ctxd/context_receipts/
-
-Fields:
-
-request_id
-timestamp
-project
-task
-budget
-candidate_total_tokens
-final_total_tokens
-token_count_estimation
-removed_tokens
-included_items
-excluded_items
-
-removed_tokens:
-
-duplicate_tokens
-irrelevant_tokens
-low_priority_tokens
-compressed_tokens
-
-Included item:
-
-path
-token_count
-reason
-score
-priority
-
-Excluded item:
-
-path
-token_count
-reason
-score
-priority
-
-Example:
-
-CONTEXT RECEIPT #1842
-
-Task:
-Stripe webhook idempotency
-
-Candidate:
-51,382 estimated tokens
-
-Budget:
-10,000
-
-Final:
-9,006 estimated tokens
-
-Reduction:
-42,376 estimated tokens
-
-Included:
-
-✓ payment/webhook.ts
-reason: direct task relevance
-priority: P1
-
-✓ payment/idempotency.ts
-reason: direct implementation relevance
-priority: P1
-
-✓ architecture.md
-reason: relevant architecture constraint
-priority: P0
-
-Excluded:
-
-× camera/stream.ts
-reason: unrelated
-
-× signage/device.ts
-reason: unrelated
-
-× old-session-12.md
-reason: low priority + unrelated
-
-Token estimation:
-estimated
-
-Never say:
-
-"You saved exactly $X"
-
-unless actual provider billing data is available.
-
-============================================================
-26. GOLDEN CONTEXT BENCHMARK
-============================================================
-
-Create:
-
-tests/fixtures/benchmarks/
-
-Benchmark:
-
-stripe-webhook
-
-Each benchmark supports:
-
-MUST_INCLUDE
-SHOULD_INCLUDE
-MUST_EXCLUDE
-
-Example:
-
-MUST_INCLUDE:
-payment/webhook.ts
-payment/idempotency.ts
-
-SHOULD_INCLUDE:
-stripe/adapter.ts
-architecture.md
-
-MUST_EXCLUDE:
-camera/stream.ts
-signage/device.ts
-
-Tests:
-
-✓ required context included
-✓ irrelevant context excluded
-✓ duplicates removed
-✓ budget respected
-✓ P0/P1 preserved
-✓ receipt generated
-
-Future benchmarks:
-
-auth-migration
-database-migration
-vite-build-error
-payment-flow
-api-refactor
-frontend-bug
-
-Keep benchmark infrastructure extensible.
-
-============================================================
-27. PHASE 2 — PROJECT INTELLIGENCE
-============================================================
-
-Implement:
-
-ctxd init
-
-It must:
-
-1. detect Git repository
-2. identify repository root
-3. generate stable project ID
-4. detect runtime
-5. detect language
-6. detect package manager
-7. detect framework
-8. inspect important configuration
-9. inspect repository structure
-10. inspect recent Git commits
-11. create project metadata
-12. create local project storage
-13. generate agent integration instructions
-
-Support:
-
-package.json
-pnpm-lock.yaml
-package-lock.json
-yarn.lock
-bun.lock
-tsconfig.json
-vite.config.*
-next.config.*
-nuxt.config.*
-Cargo.toml
-pyproject.toml
-requirements.txt
-go.mod
-pom.xml
-build.gradle*
-settings.gradle*
-Dockerfile
-docker-compose*
-README.md
-
-Do not infer solely from folder names.
-
-Inspect actual files.
-
-============================================================
-28. INCREMENTAL INDEXING
-============================================================
-
-Track:
-
-path
-mtime
-size
-hash
-language
-imports
-exports
-
-Only reprocess changed files.
-
-Respect:
-
-.gitignore
-
-.ctxdignore
-
-Example:
-
-.env
-.env.*
-node_modules
-dist
-build
-coverage
-secrets
-private/
-
-Never index secrets by default.
-
-============================================================
-29. GIT AWARENESS
-============================================================
-
-Track:
-
-branch
-status
-recent commits
-changed files
-diff summaries
-
-Later:
-
-git_commits
-git_changes
-
-Do not replace Git.
-
-Git remains the source of truth for repository history.
-
-============================================================
-30. PHASE 3 — PERSISTENT MEMORY
-============================================================
-
-Memory types:
-
-FACT
-DECISION
-ARCHITECTURE
-CONSTRAINT
-RULE
-BUG
-TASK
-NOTE
-EXPERIMENT
-PREFERENCE
-FILE
-SNAPSHOT
-SESSION
-CONVERSATION
-
-Fields:
-
-id
-project_id
-type
-title
-content
-importance
-confidence
-source
-created_at
-updated_at
-last_accessed_at
-hash
-status
-tags
-
-Use SQLite for:
-
-- metadata
-- relationships
-- indexing
-- search
-
-Use Markdown/JSON for large durable human-readable knowledge.
-
-Do not put every huge blob directly into SQLite.
-
-Project storage:
-
-~/.ctxd/projects/<project-id>/
-
-project.md
-architecture.md
-stack.md
-rules.md
-decisions.md
-bugs.md
-tasks.md
-sessions/
-snapshots/
-memory/
-
-============================================================
-31. MEMORY AUTHORITY
-============================================================
-
-Authority order:
-
-explicit user instruction
->
-project rule
->
-accepted decision
->
-verified code state
->
-verified Git history
->
-worker statement
->
-inferred memory
-
-Inferred memory must never silently override explicit rules.
-
-Semantic memories have confidence.
-
-Example:
-
-confidence: 0.95
-source: explicit_user
+Claude
+  │
+  │ context request
+  ▼
+ctxd
+  │
+  │ retrieve
+  ▼
+Memory
 
 or:
 
-confidence: 0.67
-source: inferred_from_worker
-
-User-provided explicit facts have highest authority.
-
-============================================================
-32. SEARCH
-============================================================
-
-Use SQLite FTS5 for V1.
-
-Support:
-
-- terms
-- phrases
-- project filtering
-- memory type filtering
-- priority
-- recency
-- weighted fields
-
-Do NOT add vector DB.
-
-Do NOT require embeddings.
-
-Future:
-
-FTS5 + optional local embeddings.
-
-Potential local backends:
-
-Ollama
-llama.cpp
-Candle
-
-But local AI remains optional.
-
-============================================================
-33. PHASE 4 — PRODUCTION CONTEXT FIREWALL
-============================================================
-
-Production pipeline:
-
-raw candidates
-↓
-filter
-↓
-deduplicate
-↓
-rank
-↓
-retrieve memory
-↓
-select files
-↓
-chunk
-↓
-compress
-↓
-budget
-↓
-final context
-↓
-receipt
-
-Use:
-
-- SQLite metadata
-- FTS5
-- Git
-- memory
-- project structure
-- task state
-- file relevance
-- recency
-- priority
-- configurable weights
-
-Agents should be able to request more context incrementally.
-
-Conceptually:
-
-Agent:
-"I need information about Stripe webhook retry behavior."
-
-ctxd:
-
-ctx_search("Stripe webhook retry")
-
-Then:
-
-ctx_get(...)
-ctx_file(...)
-ctx_decision(...)
-ctx_history(...)
-
-Do not immediately return the entire project.
-
-============================================================
-34. PHASE 5 — MCP
-============================================================
-
-Implement MCP after Context Firewall stability.
-
-Expose tools such as:
-
-ctx_status
-ctx_search
-ctx_get
-ctx_memory_save
-ctx_memory_update
-ctx_task_get
-ctx_task_update
-ctx_decision_get
-ctx_file_search
-ctx_file_get
-ctx_context_build
-ctx_checkpoint
-ctx_handoff
-ctx_project_summary
-
-Names may be refined.
-
-Keep them obvious.
-
-MCP must use the same core services as CLI.
-
-Do NOT duplicate business logic.
-
-============================================================
-35. CLAUDE CODE INTEGRATION
-============================================================
-
-Generate project-level instructions for Claude Code.
-
-Instructions should communicate:
-
-ctxd is persistent engineering memory.
-
-Before complex tasks:
-
-- inspect current task
-- search relevant memory
-- respect project rules
-- retrieve only relevant context
-
-Do not request entire repository memory.
-
-After meaningful work:
-
-- update task state
-- record important decisions
-- record unresolved issues
-- create checkpoint when appropriate
-
-Claude should retrieve additional context through MCP.
-
-============================================================
-36. CURSOR INTEGRATION
-============================================================
-
-Generate equivalent Cursor project instructions.
-
-Cursor and Claude must use the same ctxd project memory.
-
-Architecture:
-
-Claude
-   ↓
 ctxd
-   ↑
+  │
+  │ minimal context
+  ▼
 Cursor
 
-Same source of truth.
+or:
 
-Neither worker owns project memory.
+Cursor
+  │
+  │ code changes
+  ▼
+Repository
 
-ctxd owns persistent engineering state.
+or:
+
+Repository
+  │
+  │ verification
+  ▼
+ctxd
 
 ============================================================
-37. CROSS-WORKER HANDOFFS
+6. CONNECTION STATES
 ============================================================
 
-Implement:
+DO NOT FAKE worker connection state.
 
-ctxd handoff
+Only display states that are backed by actual data.
 
-Handoff contains:
+Minimum states:
 
-task
-objective
-completed work
-remaining work
-decisions
-constraints
-known bugs
-files changed
-Git state
-last worker
-recommended next worker
+CONNECTED
+WAITING
+DISCONNECTED
+ERROR
+
+If the system cannot honestly determine a state:
+
+UNKNOWN
+
+Do not convert UNKNOWN into CONNECTED.
+
+Do not infer connection state merely because a worker has a session row.
+
+Implement real event tracking.
+
+MCP and worker integrations should emit events such as:
+
+worker_connected
+worker_disconnected
+worker_request_started
+worker_request_finished
+worker_error
+context_requested
+context_built
+verification_started
+verification_finished
+memory_updated
+task_updated
+checkpoint_created
+
+WORKER IDENTITY IS CLAIMED, NOT VERIFIED
+
+This constrains what CONNECTED is allowed to mean.
+
+The MCP server knows one thing for certain: a client attached to the
+transport, and when it detached. That is a real, observable fact.
+
+It does NOT know who that client is. Worker identity is self-declared
+per call — packages/mcp/src/tools.ts takes `worker` as a parameter.
+Any local process can start the MCP server and call itself Claude.
+
+Therefore:
+
+"Claude is connected"
+
+is dishonest. The honest statement is:
+
+"a client is attached and claims to be Claude"
+
+The codebase already has exactly this discipline for memory: a worker
+may only write source `worker_statement` or `inferred`, never
+`verified_code` or `verified_git`, because those assert something the
+worker is not positioned to assert (packages/mcp/src/tools.ts:139-153).
+
+Apply the same rule to connection state.
+
+Store the attachment as fact.
+Store the identity as a claim.
+Render the claim as a claim.
+
+EXISTING API CONTRACT
+
+GET /api/workers currently returns state: active | idle | unknown,
+derived from session rows (packages/api/src/routes.ts:181-235).
+
+Do not silently redefine those strings. Either extend the response with
+a separate live-connection field, or version the route. The existing UI
+Workers panel must keep working through the change.
+
+STORAGE
+
+Use the existing session_events infrastructure only where an event
+genuinely belongs to a session. It cannot carry the rest — see §7.
+
+============================================================
+7. EVENT TRANSPORT
+============================================================
+
+The current repository does not have a proper live event transport.
+
+Implement this BEFORE attempting live graph animation.
+
+Primary transport:
+
+Server-Sent Events (SSE)
 
 Example:
 
-TASK:
-Stripe idempotency
+GET /api/events
 
-DONE:
+The server streams ctxd events.
 
-- idempotency keys
-- persistence
+The React UI subscribes once.
 
-REMAINING:
+Do not repeatedly reload the entire application.
 
-- retry handling
-- integration tests
+Event structure:
 
-IMPORTANT:
-Do not create duplicate Payment records.
+{
+  "id": "...",
+  "type": "worker_request_started",
+  "timestamp": "...",
+  "projectId": "...",
+  "workerId": "...",
+  "taskId": "...",
+  "data": {}
+}
 
-LAST WORKER:
-Claude
+Use the existing event/session data as the durable source where appropriate.
 
-RECOMMENDED:
-Cursor
+The event stream is the live transport.
+
+Do not make the browser responsible for inventing state.
+
+The API remains authoritative.
+
+------------------------------------------------------------
+7.1 THE PROCESS BOUNDARY — DECIDE THIS FIRST
+------------------------------------------------------------
+
+This is the hard part of UI-1 and the plan above skips it.
+
+The events do not originate where the SSE stream lives.
+
+MCP runs as its own stdio process, started by Claude or Cursor.
+The HTTP API runs as a separate process, started by `ctxd ui`.
+The CLI is a third process.
+
+An event emitted inside the MCP process cannot reach an SSE handler in
+the API process by function call. There must be a channel.
+
+DECISION: the channel is SQLite.
+
+Every producer — MCP, CLI, API — appends the event to a durable table.
+The API process tails that table and fans out to connected SSE clients.
+
+Reasons:
+
+- SQLite is already the shared state between all three processes
+- it is already WAL and already concurrent-safe
+- it works identically on Windows, macOS and Linux, where named pipes
+  and unix sockets do not
+- events survive a UI restart, so the activity stream has history
+  instead of starting empty every launch
+- no new dependency, no second daemon, no port
+
+Do NOT introduce a message broker, a socket server or a daemon process.
+
+------------------------------------------------------------
+7.2 session_events CANNOT HOLD THESE EVENTS
+------------------------------------------------------------
+
+Check the schema before assuming it can:
+
+  session_id TEXT NOT NULL REFERENCES sessions(id)
+  -- packages/db/src/schema.ts:165
+
+NOT NULL. A worker_connected event happens before any session exists,
+so it has no session_id and cannot be stored there.
+
+Add a new table via a migration — packages/db/src/migrations.ts already
+supports this cleanly:
+
+  events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id  TEXT     NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    session_id  TEXT     NULL REFERENCES sessions(id) ON DELETE SET NULL,
+    task_id     TEXT     NULL REFERENCES tasks(id)    ON DELETE SET NULL,
+    worker      TEXT     NULL,
+    type        TEXT     NOT NULL,
+    data        TEXT     NOT NULL,
+    created_at  TEXT     NOT NULL
+  ) STRICT;
+
+Everything except project_id, type and created_at is nullable, because
+an event that has no task is not an event with a fake task.
+
+session_events stays as it is. It is the per-session narrative record
+and it is not being replaced.
+
+The monotonic `id` is the SSE cursor: a reconnecting client sends
+Last-Event-ID and receives only what it missed. Do not invent a
+separate cursor scheme.
+
+------------------------------------------------------------
+7.3 SSE CONSTRAINTS
+------------------------------------------------------------
+
+- tail by polling the events table on a modest interval; do not busy-loop
+- send a periodic comment heartbeat so dead connections are noticed
+- cap concurrent subscribers and bound the per-client buffer; a slow
+  reader must not grow API memory without limit
+- close every stream on shutdown — `ctxd ui` must still exit cleanly,
+  and an open SSE handle is the classic reason a Node process will not
+- the stream is a read route, so it follows the existing read rules:
+  loopback Host and Origin checks, no token. Be aware this means every
+  local process can read task titles and worker activity, exactly as it
+  can already read /api/tasks. Do not put file contents or memory bodies
+  in the event payload — send identifiers and let the client fetch.
 
 ============================================================
-38. TASK MANAGEMENT
+8. /api/stats
 ============================================================
 
-Statuses:
+Create a proper stats endpoint if it does not already exist.
 
-BACKLOG
-PLANNED
-IN_PROGRESS
-BLOCKED
-REVIEW
-DONE
-CANCELLED
+The UI must NOT calculate engineering verdicts itself.
 
-Fields:
+The backend owns statistics.
 
-id
-title
-description
-priority
-status
-project
-parent_task
-worker
-created_at
-updated_at
-completed_at
+Provide data such as:
 
-Support task decomposition.
-
-============================================================
-39. SESSIONS
-============================================================
-
-Implement:
-
-ctxd session start
-ctxd session status
-ctxd session end
-ctxd resume
-
-Store:
-
-start
-end
-project
-task
+requests
+context requests
+candidate tokens
+final tokens
+estimated context avoided
+duplicate tokens
+irrelevant tokens
+compressed tokens
 worker activity
-Git changes
-decisions
-memories
-errors
+verification status
+changes
+over-edit detections
+comment bloat
+noise
+scope violations
 
-ctxd resume must produce a useful continuation summary.
+Support time ranges.
+
+At minimum:
+
+today
+7d
+30d
+
+Example:
+
+{
+  "period": "today",
+  "requests": 41,
+  "candidateTokens": 680000,
+  "finalTokens": 291000,
+  "estimatedContextAvoided": 389000,
+  "duplicateTokens": 94000,
+  "irrelevantTokens": 137000,
+  "compressedTokens": 82000
+}
+
+Always distinguish:
+
+EXACT
+ESTIMATED
+UNKNOWN
+
+Never claim exact billing savings unless actual provider billing information exists.
+
+Use wording:
+
+estimated context avoided
+
+NOT:
+
+money saved
+
+unless real billing data exists.
 
 ============================================================
-40. CHECKPOINTS
+9. TOKEN MONITOR
 ============================================================
 
-Checkpoint contains:
+The graph/home screen should include a compact token monitor.
 
-objective
-completed work
-remaining work
-decisions
-constraints
-changed files
-known errors
-next action
-worker
-Git state
+Example:
 
-Original session data remains archived.
+TODAY
+
+Context requested:
+680k estimated
+
+Context delivered:
+291k estimated
+
+Estimated avoided:
+389k
+
+Efficiency:
+57%
+
+Breakdown:
+
+duplicates
+irrelevant
+low priority
+compression
+
+Allow clicking the monitor to open the full context inspector.
+
+Reuse existing stats/context systems.
+
+Do not create duplicate token calculation logic.
 
 ============================================================
-41. LONG-TERM ENGINEERING MANAGER
+10. CONTEXT FLOW VISUALIZATION
 ============================================================
 
-Eventually the manager should:
+When a worker requests context:
 
-1. understand task
-2. inspect repository
-3. retrieve context
-4. plan
-5. choose worker
-6. monitor worker
-7. verify changes
-8. update memory
-9. create handoff
+animate:
 
-BUT:
+WORKER
+  ↓
+ctxd
+  ↓
+Memory / Git / Files
+  ↓
+Context Firewall
+  ↓
+compact context
+  ↓
+WORKER
 
-Do not call an LLM when deterministic tooling can solve the problem.
+The animation should be subtle.
+
+Do not create a distracting "AI sci-fi" interface.
+
+This is a developer engineering tool.
+
+Visual language:
+
+technical
+dark
+clean
+calm
+dense
+precise
+
+Avoid:
+
+huge gradients
+marketing cards
+unnecessary animations
+fake AI effects
+
+============================================================
+11. THE MOST IMPORTANT ADDITION:
+    CHANGE FIREWALL
+============================================================
+
+ctxd must not only optimize INPUT context.
+
+It should also optimize/control OUTPUT changes.
+
+AI workers frequently over-edit.
+
+Example:
+
+Developer asks:
+
+"Change this one line."
+
+Worker changes:
+
+1 requested line
+
+but produces:
+
+47 changed lines
+18 comments
+12 formatting-only changes
+2 unrelated files
+
+ctxd should detect this.
+
+The goal:
+
+SMALL REQUEST
+↓
+SMALL CHANGE
+
+unless the worker can justify why a larger change was necessary.
+
+Existing diff modules must be reused and improved.
+
+Use existing capabilities for:
+
+- over-edit
+- scope
+- comments
+- noise
+- classification
+- change receipts
+
+Do not recreate these modules.
+
+============================================================
+12. SMALL-FIX SCOPE ANALYSIS
+============================================================
+
+When the user asks for a small change:
+
+Extract expected scope from the task.
 
 Examples:
 
-search → ripgrep / indexed search
-status → Git
-tests → package scripts
-typecheck → TypeScript
-build → package scripts
-dependency information → package manager
+"change this line"
+"fix this typo"
+"rename this variable"
+"change the timeout"
+"add one condition"
 
-Use AI reasoning only when needed.
-
-============================================================
-42. WORKER ABSTRACTION
-============================================================
-
-Define:
-
-interface Worker {
-  id: string;
-  name: string;
-  capabilities: string[];
-  status(): Promise<unknown>;
-}
-
-Possible workers:
-
-claude
-cursor
-local
-
-Future workers may be added.
-
-Do not hardcode provider-specific logic into the core.
-
-============================================================
-43. VERIFICATION ENGINE
-============================================================
+Expected scope is small.
 
 After worker changes:
 
-Run appropriate verification:
+Calculate:
 
-git diff
-git status
-typecheck
-tests
-lint
-build
-architecture checks
+requested scope
+actual scope
+
+Example:
+
+Requested:
+1 line
+
+Actual:
+34 lines
+
+Then:
+
+SCOPE EXCEEDED
+
+This does NOT automatically mean the worker is wrong.
+
+Instead classify:
+
+EXPECTED
+POSSIBLY JUSTIFIED
+SUSPICIOUS
+CLEARLY UNRELATED
+
+Example:
+
+Task:
+Change timeout from 30s to 60s.
+
+Actual:
+
+config.ts +1/-1
 
 Result:
 
-PASS
-FAIL
-NEEDS_REVIEW
+EXPECTED
 
-If failure occurs:
+Another:
 
-DO NOT resend the entire original context.
+Task:
+Change timeout from 30s to 60s.
 
-Build compact correction context containing:
+Actual:
 
-- failed command
-- error
-- relevant changed file
-- relevant surrounding code
-- task requirement
-- relevant rule/decision
+12 files
++438 lines
++200 comments
 
-This is critical for token efficiency.
+Result:
+
+SUSPICIOUS
 
 ============================================================
-44. ARCHITECTURE DRIFT DETECTION
+13. COMMENT BLOAT DETECTION
 ============================================================
 
-Allow rules such as:
+AI workers often add excessive comments.
 
-Frontend must not access database directly.
+ctxd should detect:
 
-If changed file violates known rule:
+- comments added
+- comments removed
+- comment/code ratio change
+- boilerplate comments
+- comments that simply restate code
+- generated explanatory blocks
+- unnecessary TODO-style comments
+
+Example:
+
+Before:
+
+20 comment lines
+100 code lines
+
+After:
+
+58 comment lines
+104 code lines
 
 Report:
 
-ARCHITECTURE DRIFT DETECTED
+COMMENT BLOAT
 
-Rule:
-Frontend must not access database.
++38 comment lines
++4 code lines
 
-Violation:
-apps/portal/src/foo.ts
+Comment/code ratio increased significantly.
 
-V1 may use deterministic pattern/rule checks.
+Classify comments:
 
-Do not require an LLM for every check.
+USEFUL
+NEUTRAL
+REDUNDANT
+SUSPICIOUS
 
-============================================================
-45. DECISIONS
-============================================================
+Do NOT delete comments automatically.
 
-Example:
-
-DECISION #43
-
-Question:
-Should Portal access Firebase directly?
-
-Decision:
-No.
-
-Reason:
-API owns business/data access.
-
-Status:
-ACTIVE
-
-Provide:
-
-ctxd decisions
-ctxd decision
-ctxd decision add
-
-Important decisions must be surfaced when relevant files/modules
-are touched.
+Report and optionally recommend cleanup.
 
 ============================================================
-46. BUG MEMORY
-============================================================
-
-Example:
-
-BUG #91
-
-Problem:
-Vite HMR port collision.
-
-Cause:
-Multiple applications using same port.
-
-Fix:
-Dedicated ports with strictPort.
-
-Status:
-RESOLVED
-
-When relevant areas are touched, surface previous bugs.
-
-============================================================
-47. FILE/MODULE EXPLANATIONS
-============================================================
-
-Allow explanations to be attached to files/modules.
-
-Example:
-
-FILE:
-apps/api/src/payment/idempotency.ts
-
-WHY:
-Stripe may retry requests.
-
-IMPORTANT:
-Do not remove without reviewing Decision #42.
-
-This protects intentional unusual code from AI cleanup.
-
-============================================================
-48. TOKEN STATISTICS
-============================================================
-
-Track:
-
-request_id
-worker
-task
-input_tokens
-output_tokens_estimate
-memory_tokens
-file_tokens
-instruction_tokens
-removed_tokens
-deduplicated_tokens
-compressed_tokens
-final_tokens
-timestamp
-
-Distinguish:
-
-exact
-estimated
-unknown
-
-Never claim exact provider billing unless actual billing data exists.
-
-============================================================
-49. EFFICIENCY
-============================================================
-
-Implement:
-
-ctxd stats
-ctxd efficiency
-
-Example:
-
-Today
-
-Requests: 41
-
-Raw candidate context:
-680k estimated
-
-Final context:
-291k estimated
-
-Removed:
-
-Duplicate:
-94k
-
-Irrelevant:
-137k
-
-Compression:
-82k
-
-Estimated context avoided:
-389k
-
-Use:
-
-"estimated context avoided"
-
-Never:
-
-"you saved $X"
-
-unless actual billing data exists.
-
-============================================================
-50. CODE CHANGE MINIMIZER / DIFF FIREWALL
-============================================================
-
-This is a first-class ctxd feature.
-
-AI workers frequently make unnecessarily large changes.
-
-Examples:
-
-1. One-line fix reformats an entire file.
-2. Small change rewrites an entire function.
-3. AI changes unrelated variable names.
-4. AI changes unrelated imports.
-5. AI adds unnecessary comments.
-6. AI adds excessive documentation.
-7. AI performs unrelated cleanup.
-8. AI refactors surrounding code.
-9. AI modifies unrelated dependencies.
-10. AI changes multiple unrelated files.
-11. AI duplicates helpers.
-12. AI adds unnecessary defensive code.
-13. AI changes whitespace/line endings across the file.
-
-ctxd must detect this.
-
-IMPORTANT:
-
-Do NOT blindly rewrite worker code.
-
-Do NOT automatically remove code simply because the diff is large.
-
-Do NOT assume a large diff is wrong.
-
-The goal is:
-
-MINIMUM NECESSARY CHANGE
-
-while preserving:
-
-- behavior
-- correctness
-- tests
-- architecture
-- security
-- business logic
-
-============================================================
-51. CHANGE SURFACE
-============================================================
-
-Every task should have an expected change scope.
-
-Example:
-
-Task:
-Fix Stripe webhook idempotency.
-
-Expected:
-
-payment/webhook.ts
-payment/idempotency.ts
-
-Potentially acceptable:
-
-related test file
-
-Unexpected:
-
-camera/
-signage/
-unrelated frontend files
-package upgrades
-
-Calculate:
-
-files_changed
-lines_added
-lines_removed
-lines_modified
-unrelated_files
-formatting_only_changes
-comment_only_changes
-import_only_changes
-dependency_changes
-rename_changes
-generated_file_changes
-
-Example:
-
-Expected files:
-2
-
-Actual files:
-7
-
-ctxd:
-
-CHANGE SURFACE WARNING
-
-Expected:
-2 files
-
-Actual:
-7 files
-
-Potentially unrelated:
-5 files
-
-Do not automatically reject.
-
-Classify and request review when appropriate.
-
-============================================================
-52. AI OVER-EDIT DETECTION
-============================================================
-
-Detect signals:
-
-- unusually large line count increase
-- unusually large line count decrease
-- entire-file rewrite
-- high percentage of unchanged content represented as changed
-- formatting-only changes
-- comment-only changes
-- unrelated files
-- unrelated imports
-- dependency changes
-- broad refactoring
-- unrelated symbol renames
-- generated documentation
-- duplicated logic
-- duplicated comments
-
-Calculate:
-
-change_efficiency_score
-
-This is NOT a correctness score.
-
-It measures how focused the change appears to be.
-
-Example:
-
-Task:
-"Fix null check in payment webhook."
-
-Worker:
-
-2 files
-+180 lines
--95 lines
-
-ctxd:
-
-CHANGE SURFACE: HIGH
-
-Potential over-editing detected.
-
-Likely causes:
-
-- broad refactor
-- formatting changes
-- unrelated cleanup
-
-Recommendation:
-
-Review diff before continuing.
-
-============================================================
-53. FORMATTING NOISE DETECTION
+14. CODE CHURN / NOISE
 ============================================================
 
 Detect:
 
-- indentation-only changes
-- line-ending changes
-- quote-style changes
-- import reordering
-- whitespace-only changes
-- formatter-only changes
-- whole-file formatting
-
-Separate:
-
-semantic changes
-
-from:
-
-presentation-only changes
-
-Example:
-
-Semantic changes:
-4 lines
-
-Formatting changes:
-312 lines
-
-Report:
-
-LARGE FORMATTING-ONLY CHANGE DETECTED
-
-Do not automatically revert.
-
-Do not destroy the worker's work.
-
-Allow a future safe cleanup/revert mechanism after verification.
-
-============================================================
-54. COMMENT NOISE REDUCTION
-============================================================
-
-AI-generated comments must be treated carefully.
-
-Preserve comments that communicate:
-
-- WHY unusual behavior exists
-- security constraints
-- business rules
-- external API quirks
-- intentional workarounds
-- architectural constraints
-- non-obvious invariants
-
-Flag or optionally remove comments that merely describe:
-
-- obvious syntax
-- obvious variable names
-- obvious control flow
-- what the next line literally does
-
-Example:
-
-KEEP:
-
-// Stripe can retry the same event, so this must remain idempotent.
-
-Potentially unnecessary:
-
-// Check if the event exists.
-if (event) {
-}
-
-Important:
-
-Do not blindly delete comments.
-
-The goal is to move durable reasoning into ctxd memory/decisions
-where appropriate instead of repeatedly bloating source files.
-
-============================================================
-55. SMALL-FIX PROTECTION
-============================================================
-
-If the task is identified as a small change:
-
-Examples:
-
-- one bug fix
-- one condition
-- one typo
-- one configuration value
-- one API parameter
-- one test assertion
-
-ctxd should establish a small expected change surface.
+format-only changes
+whitespace-only changes
+import reorder
+line ending changes
+generated files
+lockfile noise
+unrelated file changes
+large rewrites
+rename noise
 
 Example:
 
 Task:
-"Change webhook retry limit from 3 to 5."
 
-Expected:
+"Fix login button disabled state."
 
-1 file
-1-5 changed lines
+Worker changed:
 
-If worker produces:
+8 relevant lines
++
+1,200 formatting changes
 
-8 files
-+240 lines
--120 lines
+Report:
 
-ctxd should flag:
+HIGH CHANGE NOISE
 
-SMALL TASK / LARGE CHANGE MISMATCH
+Relevant:
+8 lines
 
-Potential unnecessary work detected.
+Noise:
+1,200 lines
 
-Require review before considering the task complete.
+This should affect the Change Receipt.
 
 ============================================================
-56. CHANGE RECEIPT
+15. CHANGE RECEIPT
 ============================================================
 
-Every meaningful worker run should produce a Change Receipt.
-
-Fields:
-
-request_id
-task
-worker
-files_changed
-lines_added
-lines_removed
-formatting_only_changes
-comment_only_changes
-unrelated_files
-dependency_changes
-risk
-change_efficiency_score
-verification_status
+Every meaningful worker change should produce a Change Receipt.
 
 Example:
 
 CHANGE RECEIPT
 
 Task:
-Fix Stripe webhook idempotency
+Fix login button disabled state
 
-Changed:
-1 file
+Worker:
+Claude
 
-Added:
-4 lines
+Files changed:
+3
 
-Removed:
-2 lines
+Relevant changes:
+8 lines
 
-Unrelated changes:
-0
+Total changed:
+1,208 lines
 
-Formatting-only:
-0
+Noise:
+1,200 lines
 
-Comment-only:
-0
+Comment additions:
++38
 
-Dependency changes:
-0
+Unrelated files:
+2
 
-Assessment:
-Minimal focused change
+Scope:
+EXCEEDED
 
-Verification:
-PASS
+Verdict:
+REVIEW REQUIRED
 
-Store:
+Reasons:
 
-~/.ctxd/change_receipts/
+- excessive formatting changes
+- comment bloat
+- unrelated files
 
-============================================================
-57. DIFF FIREWALL DECISION
-============================================================
+The receipt must be machine-readable and human-readable.
 
-The Diff Firewall should classify:
-
-FOCUSED
-ACCEPTABLE
-BROAD
-SUSPICIOUS
-NEEDS_REVIEW
-
-Do not make arbitrary judgments.
-
-Use evidence:
-
-- task scope
-- changed files
-- relevant context
-- Git diff
-- architecture rules
-- tests
-- dependency changes
-- formatting noise
-- comment noise
+Reuse existing Change Receipt infrastructure.
 
 ============================================================
-58. WORKER RESPONSE COMPRESSION
+16. WORKER PANEL
 ============================================================
 
-AI worker text output is also expensive.
+The graph nodes represent workers.
 
-Default worker output mode:
-
-minimal
-
-Modes:
-
-minimal
-normal
-detailed
-
-Routine worker responses should be structured.
+Clicking Claude opens a worker detail panel.
 
 Example:
 
-Changed:
-- apps/api/src/payment/webhook.ts
-- tests/payment/webhook.test.ts
-
-Result:
-Stripe webhook idempotency fixed.
-
-Tests:
-31 passed.
-
-Notes:
-Existing idempotency key is now reused on retries.
-
-Avoid unnecessary:
-
-- repeating the task
-- repeating repository context
-- entire code blocks
-- entire diffs
-- unchanged code
-- long explanations
-- obvious summaries
-
-Detailed output remains available on request.
-
-Default:
-
-MINIMUM USEFUL REPORT
-
-============================================================
-59. DUPLICATE EXPLANATION PREVENTION
-============================================================
-
-Do not repeatedly send information already known.
-
-If the worker already knows:
-
-task
-architecture
-rules
-decision
-file contents
-
-do not resend the same information unless:
-
-- context changed
-- information became stale
-- worker explicitly requests it
-- verification failure requires it
-
-This is context delta management.
-
-Prefer:
-
-previous context
-+
-delta
-
-over:
-
-entire context again
-
-============================================================
-60. CORRECTION CONTEXT
-============================================================
-
-When verification fails:
-
-Do NOT resend the original task context.
-
-Build:
-
-CORRECTION CONTEXT
-
-Containing only:
-
-- original requirement
-- failed command
-- relevant error
-- relevant changed file
-- relevant code region
-- relevant rule
-- relevant decision
-- previous attempted solution if necessary
-
-Example:
-
-Original task:
-Fix webhook idempotency.
-
-Failure:
-Test expected 409 but received 200.
-
-Relevant file:
-payment/webhook.ts
-
-Relevant rule:
-Duplicate Stripe event must not create a second payment.
-
-Send only this correction context.
-
-============================================================
-61. CONTEXT DELTA MANAGEMENT
-============================================================
-
-When a worker continues a task:
-
-Do not repeatedly resend:
-
-- full project summary
-- full architecture
-- entire files
-- entire task history
-
-Instead maintain:
-
-BASE CONTEXT
-+
-TASK DELTA
-+
-CHANGE DELTA
-+
-ERROR DELTA
-
-This should significantly reduce repeated context.
-
-============================================================
-62. SECURITY
-============================================================
-
-ctxd is local but security is still important.
-
-Requirements:
-
-- HTTP server binds to 127.0.0.1 only
-- never bind 0.0.0.0 by default
-- no telemetry
-- no cloud database
-- never log secrets
-- redact environment variables
-- do not index .env by default
-- do not unnecessarily send secrets to workers
-- support .gitignore
-- support .ctxdignore
-- do not expose credentials through MCP unnecessarily
-- protect mutating APIs
-- require confirmation for dangerous operations
-
-Future UI must use local authentication/token protection.
-
-Do NOT expose arbitrary shell execution through MCP.
-
-============================================================
-63. COMMAND EXECUTION
-============================================================
-
-Create controlled command execution.
-
-Categories:
-
-READ_ONLY
-SAFE_MUTATING
-DANGEROUS
-
-Examples:
-
-READ_ONLY:
-
-git status
-git diff
-rg
-find
-ls
-
-SAFE:
-
-tests
-typecheck
-lint
-build
-
-DANGEROUS:
-
-rm
-git reset
-git clean
-deployment commands
-credential operations
-
-Require explicit confirmation for dangerous commands.
-
-Never expose unrestricted remote shell execution.
-
-============================================================
-64. MEMORY EXTRACTION
-============================================================
-
-After meaningful work, optionally extract:
-
-facts
-decisions
-constraints
-bugs
-next steps
-
-Prefer deterministic extraction.
-
-LLM extraction may be added later.
-
-Never make an external AI call merely to store a trivial fact.
-
-Never destroy original information.
-
-Preserve:
-
-- raw conversations
-- agent outputs
-- snapshots
-- session history
-- task history
-- context receipts
-- change receipts
-- original files
-
-Compression only affects model-facing context.
-
-============================================================
-65. OPTIONAL LOCAL AI
-============================================================
-
-Design interfaces:
-
-Summarizer
-MemoryExtractor
-EmbeddingProvider
-Classifier
-
-Potential backends:
-
-Ollama
-llama.cpp
-Candle
-
-But local AI is optional.
-
-The core must work without AI.
-
-============================================================
-66. OFFLINE MODE
-============================================================
-
-When AI provider is unavailable:
-
-ctxd must still support:
-
-- local search
-- memory
-- Git
-- tasks
-- sessions
-- token counting
-- context construction
-- diff analysis
-- verification
-- UI
-- CLI
-
-Graceful degradation is mandatory.
-
-============================================================
-67. PHASE 5+ UI
-============================================================
-
-Do NOT build UI during Phase 1 or 1.5.
-
-Later:
-
-React
-+
-local HTTP API
-
-Command:
-
-ctxd ui
-
-Browser:
-
-http://127.0.0.1:4317
-
-Eventually package with Tauri.
-
-Do NOT use Electron.
-
-The UI is NOT another IDE.
-
-It is:
-
-- dashboard
-- memory viewer
-- task manager
-- worker monitor
-- context debugger
-- token statistics
-- Git overview
-- change/diff inspector
-- configuration
-
-The brain remains ctxd core.
-
-============================================================
-68. CONTEXT INSPECTOR
-============================================================
-
-For every context request show:
-
-Request
-Worker
-Task
-Budget
-
-Included:
-
-Project rules
-Task
-Memory
-Files
-Git changes
-
-Excluded:
-
-Irrelevant files
-Duplicates
-Old sessions
-
-Also:
-
-candidate tokens
-final tokens
-estimated reduction
-
-Allow inspecting individual items and why they were included/excluded.
-
-============================================================
-69. WORKER MONITOR
-============================================================
-
-Show:
-
-Claude Code
-Cursor
-Local tools
-
-For each:
-
-status
-current task
-last task
-last activity
-context usage
-last error
-
-============================================================
-70. TASK UI
-============================================================
-
-Kanban:
-
-BACKLOG
-PLANNED
-IN PROGRESS
-BLOCKED
-REVIEW
-DONE
-
-Keep it lightweight.
-
-============================================================
-71. GIT UI
-============================================================
-
-Show:
-
-branch
-status
-recent commits
-changed files
-diff summary
-change efficiency
-over-edit warnings
-
-Do not replace Git.
-
-============================================================
-72. PERFORMANCE
-============================================================
-
-Target:
-
-CLI startup:
-<200ms where practical
-
-SQLite search:
-<100ms for normal projects
-
-Memory lookup:
-<100ms
+CLAUDE
 
 Status:
-near instant
+WORKING
 
-UI:
-fast localhost load
+Task:
+Stripe webhook idempotency
 
-Do not sacrifice correctness for arbitrary benchmarks.
+Started:
+12:42
+
+Last activity:
+12:47
+
+Context:
+
+Input:
+8.7k estimated
+
+Budget:
+10k
+
+Recent:
+
+context built
+files retrieved
+worker request
+changes detected
+
+Changes:
+
+4 files
++42
+-18
+
+Change firewall:
+
+SCOPE: OK
+NOISE: LOW
+COMMENTS: OK
+
+Verification:
+
+Tests: PASS
+Typecheck: PASS
+Build: PASS
+
+All values must come from actual backend data.
+
+If a value is unavailable:
+
+UNKNOWN
+
+Never invent.
+
+------------------------------------------------------------
+16.1 THE CONTEXT FIGURE IN THIS PANEL IS NOT YET BACKED
+------------------------------------------------------------
+
+As written, the "Input 8.7k / Budget 10k" line above is precisely the
+value §37 forbids. Resolve it rather than shipping the contradiction.
+
+ContextReceipt has no worker field:
+
+  request_id, timestamp, project, task, budget,
+  candidate_total_tokens, final_total_tokens, ...
+  -- packages/context/src/receipt.ts:32-48
+
+So there is no way to attribute a context request to Claude rather than
+to Cursor. Per-worker context usage is currently unknowable.
+
+ChangeReceipt, by contrast, DOES carry worker
+(packages/diff/src/receipt.ts:40), which is why the Changes and Change
+Firewall rows in this panel are backed today and the Context rows are not.
+
+Fix in UI-2, in this order:
+
+1. add an optional `worker` field to ContextReceipt
+2. accept it on POST /api/context and on the MCP context tool
+3. record it against the same claimed-identity rule as §6 — the worker
+   names itself, so this is provenance, not proof
+4. treat receipts written before the field existed as UNKNOWN; receipts
+   are files on disk and old ones will never have it
+
+Until step 1 lands, the panel shows:
+
+Context:
+UNKNOWN
+
+not a plausible-looking number.
 
 ============================================================
-73. INCREMENTAL PROCESSING
-============================================================
-
-Never rescan everything unnecessarily.
-
-Track:
-
-path
-mtime
-size
-hash
-
-Only process changed files.
-
-Cache where useful.
-
-Invalidate intelligently.
-
-When file changes:
-
-file changed
-↓
-invalidate relevant index
-↓
-update metadata
-
-Do NOT automatically send changed files to AI.
-
-============================================================
-74. EXPORT / IMPORT
+17. WORKER CONNECTIONS
 ============================================================
 
 Support:
 
-ctxd export
-ctxd import
+Claude
+Cursor
+Local
 
-Export should be human-readable where possible.
+Architecture must remain provider-independent.
 
-Allow moving ctxd knowledge to another machine.
+Use an interface such as:
 
-Avoid proprietary lock-in.
+interface Worker {
+  id: string
+  name: string
+  capabilities: string[]
+  status(): Promise<WorkerStatus>
+}
+
+Do not hardcode Claude into the core.
+
+Do not hardcode Cursor into the core.
+
+The worker manager should treat them as replaceable workers.
 
 ============================================================
-75. LOGGING
+18. CLAUDE + CURSOR
 ============================================================
 
-Levels:
+Claude and Cursor share the same ctxd project state.
 
-debug
-info
-warn
-error
+Architecture:
 
-Provide:
+Claude
+   ↓
+ctxd
 
-ctxd logs
+Cursor
+   ↓
+ctxd
 
-Never log:
+Both access:
+
+same memory
+same tasks
+same decisions
+same rules
+same Git state
+same context engine
+same checkpoints
+same handoffs
+
+No separate memories.
+
+No duplicate project state.
+
+ctxd is the source of truth.
+
+============================================================
+19. CROSS-WORKER HANDOFF
+============================================================
+
+Support:
+
+Claude → Cursor
+
+Cursor → Claude
+
+Example:
+
+Claude:
+
+implemented backend
+
+remaining:
+frontend integration
+
+Cursor:
+
+recommended next worker
+
+Handoff includes:
+
+task
+objective
+completed
+remaining
+decisions
+constraints
+bugs
+files changed
+Git state
+last worker
+recommended next worker
+
+Use existing checkpoint/handoff infrastructure where possible.
+
+============================================================
+20. LIVE ACTIVITY STREAM
+============================================================
+
+Add an activity stream.
+
+Example:
+
+12:42
+Claude connected
+
+12:43
+Task started:
+Stripe webhook idempotency
+
+12:44
+Context requested
+
+12:44
+51k → 9k estimated context
+
+12:45
+4 files changed
+
+12:46
+Change firewall:
+scope OK
+
+12:47
+Tests PASS
+
+12:47
+Checkpoint created
+
+This must be powered by actual events.
+
+Do not fake activity.
+
+============================================================
+21. VERIFICATION PANEL
+============================================================
+
+Verification must show freshness.
+
+Never simply show:
+
+Tests: PASS
+
+Instead:
+
+Tests:
+PASS
+4m ago
+
+or:
+
+PASS
+2026-08-14 02:41
+
+If no recent verification exists:
+
+UNKNOWN
+Not recently verified
+
+Use actual verification/change receipt data.
+
+Reuse existing verification package.
+
+SOURCE OF THE FRESHNESS FIGURE
+
+There is no verification-runs table. Verification runs on demand and
+its result is not persisted as a first-class record.
+
+What IS persisted is ChangeReceipt.verification_status alongside
+ChangeReceipt.timestamp (packages/diff/src/receipt.ts:37, 65). That
+pair is the honest source: a status and the moment it was true.
+
+So the panel reports the status of the last review, aged — never a
+current claim about the working tree, which may have changed since.
+
+If the newest receipt is older than the newest working-tree change:
+
+UNKNOWN
+Not verified since last edit
+
+A verification-runs table is a reasonable later addition. Do not add it
+in 2.0 unless the receipt route proves insufficient.
+
+============================================================
+22. REPOSITORY NODE
+============================================================
+
+Repository/Git is a first-class graph node.
+
+Show:
+
+repository
+branch
+clean/dirty
+changed files
+recent commit
+last verification
+current task
+
+Click opens Git panel.
+
+Do not replace Git.
+
+ctxd observes and explains Git state.
+
+============================================================
+23. MEMORY NODE
+============================================================
+
+Memory is another graph node.
+
+Show:
+
+memories
+decisions
+rules
+bugs
+architecture
+recent updates
+
+Click opens existing memory UI.
+
+The graph should show activity when memory is retrieved or updated.
+
+============================================================
+24. CONTEXT FIREWALL NODE
+============================================================
+
+Context should be visible as a major part of the central ctxd node.
+
+Show:
+
+Candidate:
+
+51k
+
+Final:
+
+9k
+
+Reduction:
+
+42k
+
+Then allow inspection.
+
+Show:
+
+Included:
+
+rules
+task
+memory
+files
+Git
+
+Excluded:
+
+irrelevant
+duplicates
+old sessions
+
+Every item should have a reason.
+
+Reuse existing Context Receipt UI.
+
+============================================================
+25. MAIN SCREEN LAYOUT
+============================================================
+
+The HOME screen should primarily be the graph.
+
+Suggested layout:
+
+┌──────────────────────────────────────────────────────────────┐
+│ ctxd                               project     status         │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│   CURSOR                          CLAUDE                     │
+│     ● ───────────────┐      ┌────────────── ●               │
+│                      │      │                               │
+│                      ▼      ▼                               │
+│                    ┌────────────┐                           │
+│                    │    ctxd    │                           │
+│                    │    CORE    │                           │
+│                    └────────────┘                           │
+│                      │      │                               │
+│                      │      │                               │
+│              ┌───────┘      └────────┐                      │
+│              ▼                        ▼                      │
+│           MEMORY                    REPO                     │
+│                                                              │
+│                                                              │
+├──────────────────────────────────────────────────────────────┤
+│ Activity                         Token / Context              │
+│ ─────────────────────           ─────────────────────         │
+│ Claude working                  51k → 9k                     │
+│ Context built                   82% efficient                │
+│ Tests passed                    Today                        │
+└──────────────────────────────────────────────────────────────┘
+
+Do not make this look like a generic SaaS dashboard.
+
+The graph is the product identity.
+
+============================================================
+26. RESPONSIVE / DESKTOP WINDOW
+============================================================
+
+The user wants this to feel like a PC application rather than
+a website.
+
+Architecture:
+
+FIRST:
+
+Existing local browser UI.
+
+SECOND:
+
+Package the same UI into a desktop window.
+
+Use:
+
+Tauri 2
+
+But ONLY after the graph and live system work correctly.
+
+Do NOT rewrite the application for Tauri.
+
+The React UI remains the frontend.
+
+Tauri is only the shell.
+
+Expected experience:
+
+ctxd
+→ opens a small native desktop window
+→ local ctxd UI
+→ no cloud
+→ no login
+→ no browser tab required
+
+Possible future:
+
+system tray
+quick status
+open dashboard
+pause worker
+view current task
+
+Do not implement the tray before core desktop packaging works.
+
+============================================================
+27. Tauri SECURITY
+============================================================
+
+Tauri must not expose unrestricted shell access.
+
+Use strict permissions.
+
+Do not allow arbitrary browser JavaScript to execute shell commands.
+
+Keep:
+
+CLI
+core
+API
+MCP
+
+as the actual engineering interfaces.
+
+Tauri is presentation/package layer.
+
+============================================================
+28. API AUTH / SECURITY
+============================================================
+
+HTTP server:
+
+127.0.0.1 only.
+
+Never default to:
+
+0.0.0.0
+
+Mutating operations must be protected.
+
+Use a local access token or equivalent mechanism.
+
+Never expose unrestricted:
+
+shell execution
+file deletion
+credential operations
+
+Redact:
 
 API keys
 passwords
@@ -2787,687 +1484,918 @@ tokens
 .env values
 credentials
 
-Use structured logging.
+Never index secrets by default.
+
+Respect:
+
+.gitignore
+.ctxdignore
 
 ============================================================
-76. DOCUMENTATION
+29. DOCUMENTATION
 ============================================================
 
-Create:
+First inspect existing docs.
 
-README.md
+Correct stale documentation.
 
-docs/
-├── architecture.md
-├── storage.md
-├── context-engine.md
-├── memory.md
-├── diff-firewall.md
-├── worker-output.md
-├── mcp.md
-├── cli.md
-├── ui.md
-├── security.md
-├── development.md
-└── roadmap.md
+In particular:
 
-Documentation must reflect actual implementation.
+docs/api.md
 
-Never document fake features.
+must reflect actual routes.
 
-============================================================
-77. TESTING
-============================================================
+Do not document:
 
-Write tests from the beginning.
+"UI does not exist"
 
-Unit:
+if UI already exists.
 
-- configuration
-- paths
-- token estimation
-- ranking
-- deduplication
-- compression
-- budget logic
-- receipt generation
-- change-surface calculation
-- formatting detection
-- comment detection
-- over-edit detection
+Document:
 
-Integration:
+actual routes
+actual UI
+actual worker state
+actual events
 
-- SQLite
-- migrations
-- FTS5
-- context engine
-- project indexing
-- Git
-- diff firewall
+Create/update:
 
-E2E:
+docs/architecture.md
+docs/api.md
+docs/ui.md
+docs/events.md
+docs/workers.md
+docs/change-firewall.md
+docs/security.md
+docs/desktop.md
+docs/roadmap.md
+docs/plan-tracker.md
+docs/storage.md
 
-ctxd doctor
-ctxd status
-ctxd init
-ctxd context
+docs/plan-tracker.md is how 1.0 actually landed: every phase had
+checkboxes and exit criteria, and nothing was marked done without them.
+Extend it with the UI-0 to UI-12 phases below. Do not start a second
+tracker file.
 
-Tests must use temporary directories.
+docs/storage.md must gain the new events table.
 
-Do NOT modify:
+docs/roadmap.md currently lists the event transport nowhere and Tauri
+under "Not built". Move Tauri to 2.0 scope and add the events table,
+/api/stats and the graph.
 
-~/.ctxd
+Documentation must match implementation.
 
-during tests.
-
-No test should depend on the user's actual machine.
+Never write fake future behavior as current behavior.
 
 ============================================================
-78. QUALITY RULES
+30. PHASE ORDER
 ============================================================
 
-Use:
+DO NOT use the old greenfield Phase 1 → Phase 10 plan.
 
-- strict TypeScript
-- no unnecessary any
-- ESM
-- clear interfaces
-- small modules
-- dependency inversion where useful
-- no circular dependencies
-- prepared SQL
-- secure defaults
-- explicit error handling
-- graceful shutdown
-- structured logging
+ctxd 1.0 already exists.
 
-Avoid abstraction for abstraction's sake.
+Use this 2.0 plan:
 
-============================================================
-79. IMPLEMENTATION ORDER
-============================================================
+------------------------------------------------------------
+UI-0 — AUDIT + DOCUMENTATION CORRECTION
+------------------------------------------------------------
 
-Implement in exactly this general order:
+The audit itself is done — see §3. What remains here is the correction
+work it produced.
 
-PHASE 1
-Foundation
+Tasks:
 
-↓
+1. fix docs/api.md: the UI exists; add /api/workers and /api/config
+2. extend docs/plan-tracker.md with the UI phases below
+3. confirm the §3 matrix still matches the tree before building on it
 
-PHASE 1.5
-Context Engine Prototype
+Exit criteria:
 
-↓
+- no doc states that a built feature is unbuilt
+- docs/api.md route table matches packages/api/src/routes.ts exactly
+- plan tracker carries UI-0 to UI-12 with exit criteria
 
-PHASE 2
-Project Intelligence
+------------------------------------------------------------
+UI-1 — EVENT TRANSPORT
+------------------------------------------------------------
 
-↓
+Read §7.1 to §7.3 first. The process boundary is the design problem
+here; SSE is the easy half.
 
-PHASE 3
+Implement, in order:
+
+1. migration adding the `events` table (§7.2)
+2. an emit path in @ctxd/core or @ctxd/db that every process can call
+3. producers: MCP first, then API, then CLI
+4. GET /api/events — SSE, tailing the table, Last-Event-ID cursor
+5. one subscription in the React UI, not one per panel
+
+Support:
+
+worker events
+context events
+task events
+memory events
+verification events
+Git-related events
+change firewall events
+
+Exit criteria:
+
+- an event emitted by the MCP process appears in a browser attached to
+  the API process — this is the whole point of the phase
+- reconnect with Last-Event-ID replays only what was missed
+- no fake event data
+- `ctxd ui` still exits cleanly with a subscriber attached
+- events survive a UI restart
+- a slow client cannot grow API memory without bound
+
+------------------------------------------------------------
+UI-2 — REAL WORKER STATE + RECEIPT PROVENANCE
+------------------------------------------------------------
+
+Implement:
+
+CONNECTED
+WAITING
+DISCONNECTED
+ERROR
+UNKNOWN
+
+backed by the transport-level attachment facts from §6, with identity
+rendered as a claim rather than as proof.
+
+Also in this phase, because the worker panel is blocked without it:
+
+- add optional `worker` to ContextReceipt (§16.1)
+- thread it through POST /api/context and the MCP context tool
+- older receipts without the field read UNKNOWN
+
+Exit criteria:
+
+- state changes from real events
+- UNKNOWN remains UNKNOWN when no evidence exists
+- no fake connected state
+- the UI never presents a claimed worker identity as verified
+- GET /api/workers keeps its existing contract; the Workers panel still
+  works unchanged
+- a context receipt written by Claude is distinguishable from one
+  written by Cursor
+
+------------------------------------------------------------
+UI-3 — GRAPH HOME SCREEN
+------------------------------------------------------------
+
+Build:
+
+ctxd central node
+Claude
+Cursor
+Repository
 Memory
+Context
+Verification
 
-↓
+Use hand-written SVG.
 
-PHASE 4
-Production Context Firewall
+Exit criteria:
 
-↓
+- graph renders
+- nodes are real
+- data comes from backend
+- existing panels remain accessible
 
-PHASE 5
-MCP + Claude/Cursor integration
+------------------------------------------------------------
+UI-4 — LIVE GRAPH
+------------------------------------------------------------
 
-↓
+Connect graph to SSE.
 
-PHASE 6
-Tasks + Sessions + Checkpoints + Handoffs
+Animate:
 
-↓
+context request
+context retrieval
+worker activity
+verification
+memory updates
 
-PHASE 7
-Worker management + Verification + Diff Firewall
+Exit criteria:
 
-↓
+A real worker/context event changes the graph.
 
-PHASE 8
-React UI + Local API
+------------------------------------------------------------
+UI-5 — ACTIVITY STREAM
+------------------------------------------------------------
 
-↓
+Implement activity feed.
 
-PHASE 9
-Optimization + Benchmarks
+Exit criteria:
 
-↓
+Every displayed event corresponds to a real event.
 
-PHASE 10
-Optional local AI / embeddings / Tauri
+------------------------------------------------------------
+UI-6 — CHANGE FIREWALL UI
+------------------------------------------------------------
 
-Do not reverse this order without a strong technical reason.
+Surface existing:
+
+over-edit
+scope
+comment bloat
+noise
+unrelated changes
+change receipts
+
+Exit criteria:
+
+A small-change benchmark produces a real warning.
+
+------------------------------------------------------------
+UI-7 — TOKEN MONITOR
+------------------------------------------------------------
+
+Implement:
+
+TODAY
+7D
+30D
+
+Use /api/stats.
+
+Exit criteria:
+
+No client-side recomputation of backend verdicts.
+
+------------------------------------------------------------
+UI-8 — VERIFICATION FRESHNESS
+------------------------------------------------------------
+
+Show:
+
+PASS
+FAIL
+UNKNOWN
+
+with timestamps/age.
+
+Exit criteria:
+
+Never show stale PASS as current.
+
+------------------------------------------------------------
+UI-9 — GRAPH INTERACTION
+------------------------------------------------------------
+
+Implement:
+
+pan
+zoom
+drag
+collapse
+node selection
+detail panel
+
+Exit criteria:
+
+Graph remains usable with 10+ nodes.
+
+------------------------------------------------------------
+UI-10 — DESKTOP SHELL
+------------------------------------------------------------
+
+Add Tauri 2.
+
+Do not rewrite core.
+
+Do not rewrite React UI.
+
+Exit criteria:
+
+ctxd launches as a local desktop window.
+
+CLI continues working independently.
+
+------------------------------------------------------------
+UI-11 — CROSS-WORKER HANDOFF
+------------------------------------------------------------
+
+Improve:
+
+Claude ↔ Cursor
+
+handoffs.
+
+Exit criteria:
+
+Task can move from one worker to another without losing context.
+
+------------------------------------------------------------
+UI-12 — FINAL BENCHMARK
+------------------------------------------------------------
+
+Run benchmarks for:
+
+context reduction
+retrieval quality
+small fixes
+over-edit
+comment bloat
+noise
+worker handoff
+verification
 
 ============================================================
-80. PHASE 1 EXIT CRITERIA
+31. IMPORTANT: CHANGE FIREWALL IS A CORE FEATURE
 ============================================================
 
-Must pass:
+ctxd has TWO firewalls:
 
-pnpm install
-pnpm build
-pnpm typecheck
-pnpm test
+INPUT FIREWALL:
 
-And:
+Large repository knowledge
+↓
+relevant context
+↓
+small useful context
 
-ctxd --help
-ctxd doctor
-ctxd status
+OUTPUT FIREWALL:
 
-SQLite:
+AI worker output
+↓
+Git diff
+↓
+scope analysis
+↓
+noise analysis
+↓
+comment analysis
+↓
+verification
+↓
+human review
 
-✓ opens
-✓ WAL enabled
-✓ foreign keys enabled
-✓ FTS5 available
-✓ migration version tracked
+Therefore:
 
-No:
+ctxd controls BOTH directions.
 
-✓ cloud services
-✓ telemetry
-✓ secrets logged
-✓ fake checks
-
-============================================================
-81. PHASE 1.5 EXIT CRITERIA
-============================================================
-
-Must pass:
-
-Candidate >50k estimated tokens.
-
-Final <= configured budget.
-
-Context Receipt generated.
-
-Golden benchmark passes.
-
-Required context preserved.
-
-Irrelevant context excluded.
-
-Duplicates removed.
-
-All processing local.
-
-No LLM calls.
-
-No embeddings.
-
-No cloud.
+This is a major identity of ctxd.
 
 ============================================================
-82. DIFF FIREWALL EXIT CRITERIA
+32. SMALL CHANGE BENCHMARK
 ============================================================
 
-Must demonstrate:
+Create a golden benchmark.
 
-1. Small task + small diff = focused.
-2. Small task + huge diff = warning.
-3. Formatting-only noise detected.
-4. Comment-only noise detected.
-5. Unrelated files detected.
-6. Dependency changes detected.
-7. Large refactor detected.
-8. Relevant large change is not automatically rejected.
-9. Change Receipt generated.
-10. Verification result recorded.
-
-Example:
+Three golden benchmarks already exist, with a harness and fixtures under
+tests/fixtures/benchmarks — including stripe-webhook. Add this scenario
+to that harness. Do not build a second benchmark mechanism, and see
+docs/benchmarks.md for how a scenario is added.
 
 Task:
 
-"Change retry count from 3 to 5."
+"Change the Stripe webhook timeout from 30 seconds to 60 seconds."
 
-Good:
+Expected:
 
+1 relevant file
+1-2 lines changed
+
+The benchmark should flag:
+
+multiple unrelated files
+large formatting changes
+large comment additions
+large rewrites
+unrelated refactoring
+
+Example failure:
+
+Expected:
 1 file
-2 changed lines
 
-Warning:
+Actual:
+9 files
 
-12 files
-+430 lines
--390 lines
+Result:
 
-ctxd must explain WHY it considers the second change suspicious.
+SCOPE EXCEEDED
+
+Noise:
+HIGH
+
+Comment bloat:
+HIGH
+
+Verdict:
+REVIEW REQUIRED
 
 ============================================================
-83. LONG-TERM MANAGER
+33. TOKEN + CHANGE OPTIMIZATION
 ============================================================
 
-Eventually the developer should be able to say:
+ctxd should measure:
+
+INPUT:
+
+candidate context
+final context
+estimated avoided context
+
+OUTPUT:
+
+requested scope
+actual scope
+noise
+comments
+unrelated files
+verification
+
+This allows the UI to eventually show:
+
+TOKEN EFFICIENCY
++
+CHANGE EFFICIENCY
+
+Example:
+
+TODAY
+
+Context:
+
+680k → 291k
+
+Estimated avoided:
+389k
+
+Changes:
+
+Relevant:
+1,420 lines
+
+Noise:
+312 lines
+
+Comment bloat:
+48 lines
+
+Scope violations:
+3
+
+The goal is not merely:
+
+"less tokens"
+
+The goal is:
+
+LESS WASTED CONTEXT
++
+LESS WASTED CODE CHURN
+
+============================================================
+34. DO NOT OVER-AUTOMATE
+============================================================
+
+ctxd should detect problems.
+
+It should not silently destroy worker changes.
+
+Never automatically:
+
+delete comments
+delete files
+rewrite code
+discard changes
+reset Git
+clean working tree
+
+Instead:
+
+detect
+explain
+recommend
+require approval when destructive
+
+============================================================
+35. PERFORMANCE
+============================================================
+
+Target:
+
+CLI startup:
+<200ms where practical
+
+API:
+fast localhost response
+
+SSE:
+low latency
+
+SQLite:
+fast normal queries
+
+UI:
+fast initial load
+
+Graph:
+smooth interaction
+
+Do not sacrifice correctness for arbitrary benchmarks.
+
+Cache intelligently.
+
+Use:
+
+mtime
+size
+hash
+
+to avoid unnecessary rescanning.
+
+============================================================
+36. TESTING
+============================================================
+
+Run existing tests first.
+
+Then add tests.
+
+Unit:
+
+events
+worker state
+graph transformation
+scope analysis
+comment analysis
+noise analysis
+token stats
+
+Integration:
+
+SSE
+API stats
+worker events
+change receipts
+
+E2E:
+
+real context request
+real worker event
+real graph update
+real small-change detection
+
+Use temporary test directories.
+
+Do not modify the user's real ~/.ctxd.
+
+The suite runs under `node --test` across tests/unit, tests/integration
+and tests/e2e. An SSE test that leaves a stream open will hang the
+runner rather than fail it — close every subscription in teardown, and
+assert that the server exits with a client attached.
+
+379 tests pass today. Run them before touching anything, so a later
+failure is attributable.
+
+============================================================
+37. ABSOLUTE RULE:
+    NEVER FAKE DATA
+============================================================
+
+This is critical.
+
+If data does not exist:
+
+show:
+
+UNKNOWN
+
+not:
+
+PASS
+
+not:
+
+CONNECTED
+
+not:
+
+8.7k / 10k
+
+not:
+
+Tests PASS
+
+unless backed by actual data.
+
+Every displayed metric must have a real source.
+
+============================================================
+38. DO NOT REBUILD WHAT EXISTS
+============================================================
+
+If you discover:
+
+memory already works:
+
+reuse it.
+
+context receipt already works:
+
+reuse it.
+
+diff firewall already works:
+
+reuse it.
+
+verification already works:
+
+reuse it.
+
+stats already work:
+
+reuse them.
+
+task system already works:
+
+reuse it.
+
+Git integration already works:
+
+reuse it.
+
+UI panels already exist:
+
+connect them.
+
+The purpose of 2.0 is:
+
+CONNECT
+UNIFY
+VISUALIZE
+EXTEND
+
+not:
+
+REWRITE
+
+============================================================
+39. DEVELOPMENT WORKFLOW
+============================================================
+
+Before each phase:
+
+1. inspect
+2. understand
+3. identify existing implementation
+4. identify missing pieces
+5. plan smallest change
+6. implement
+7. test
+8. typecheck
+9. verify
+10. update docs
+
+Never claim success without testing.
+
+After each phase provide:
+
+WHAT CHANGED
+FILES
+TESTS
+RESULT
+REMAINING
+
+============================================================
+40. FINAL UX
+============================================================
+
+The finished ctxd should feel like:
+
+"my engineering command center"
+
+not:
+
+"another AI chat application"
+
+The developer opens it and immediately understands:
+
+WHAT IS HAPPENING?
+
+WHO IS WORKING?
+
+WHAT CONTEXT IS BEING USED?
+
+HOW MUCH CONTEXT WAS REDUCED?
+
+WHAT CHANGED?
+
+DID THE AI OVER-EDIT?
+
+DID IT ADD USELESS COMMENTS?
+
+DID IT TOUCH UNRELATED FILES?
+
+DID TESTS PASS?
+
+WHAT DOES CLAUDE KNOW?
+
+WHAT DOES CURSOR KNOW?
+
+WHAT DOES ctxd REMEMBER?
+
+WHAT SHOULD HAPPEN NEXT?
+
+============================================================
+41. LONG-TERM MANAGER
+============================================================
+
+Eventually the user should be able to say:
 
 "Take care of this issue."
 
-ctxd should:
-
-1. understand repository
-2. inspect memory
-3. create task
-4. create plan
-5. choose worker
-6. build minimal context
-7. assign work
-8. monitor worker
-9. verify
-10. detect failures
-11. create correction context
-12. retry when appropriate
-13. analyze change surface
-14. detect unnecessary edits
-15. record decisions
-16. create checkpoint
-17. report result
-
-Worker could be:
-
-Claude
-Cursor
-another provider
-local model
-
-Worker is replaceable.
-
-ctxd remains the persistent engineering layer.
-
-============================================================
-84. EXAMPLE FUTURE WORKFLOW
-============================================================
-
-Developer:
-
-"Make the payment system production ready."
-
 ctxd:
 
-"I'll inspect the current architecture and existing work."
+1. understands task
+2. retrieves memory
+3. inspects Git
+4. builds minimal context
+5. selects worker
+6. sends work
+7. monitors worker
+8. receives changes
+9. runs change firewall
+10. verifies
+11. detects failures
+12. creates correction context
+13. asks worker to correct
+14. verifies again
+15. records decisions
+16. updates memory
+17. creates checkpoint
+18. reports result
 
-↓
+Example final report:
 
-Retrieve relevant knowledge.
+TASK COMPLETED
 
-↓
+Worker:
+Claude
 
-Create task.
+Files changed:
+4
 
-↓
+Tests:
+31/31 PASS
 
-Build minimal context.
+Typecheck:
+PASS
 
-↓
+Context:
 
-Choose worker.
-
-↓
-
-Worker implements.
-
-↓
-
-Diff Firewall analyzes changes.
-
-↓
-
-Verification runs.
-
-↓
-
-If failure:
-
-Build compact correction context.
-
-↓
-
-Worker fixes.
-
-↓
-
-Verify again.
-
-↓
-
-Update memory.
-
-↓
-
-Create checkpoint.
-
-↓
-
-Report:
-
-Production-readiness task completed.
-
-Files changed: 18
-Tests added: 31
-Tests passing: 31
-Architecture violations: 0
-
-Candidate context:
+Candidate:
 47k estimated
 
-Final context:
+Final:
 11k estimated
 
 Estimated context avoided:
 36k
 
-Change surface:
-Focused
+Change Firewall:
 
-Unrelated changes:
+Scope:
+OK
+
+Noise:
+LOW
+
+Comment bloat:
+NONE
+
+Architecture violations:
 0
 
-Formatting noise:
-0
+Memory:
 
-3 decisions recorded.
-2 bugs resolved.
-1 checkpoint created.
+3 decisions recorded
+2 bugs resolved
+1 checkpoint created
 
 Ready for human review.
 
 ============================================================
-85. WHAT ctxd MUST NEVER BECOME
+42. FINAL ARCHITECTURAL PRINCIPLE
 ============================================================
-
-Do not turn ctxd into:
-
-- another ChatGPT
-- another Cursor
-- another Claude Code
-- another IDE
-- a cloud SaaS
-- a giant autonomous agent framework
-- an unnecessary vector database
-- a black-box AI memory system
-- a telemetry platform
-
-The intelligence should come primarily from:
-
-local project state
-+
-Git
-+
-memory
-+
-search
-+
-deterministic algorithms
-+
-task state
-+
-verification
-
-AI is an optional reasoning layer.
-
-============================================================
-86. MOST IMPORTANT DISTINCTION
-============================================================
-
-ctxd is NOT primarily an AI chatbot.
-
-ctxd is:
-
-LOCAL ENGINEERING MEMORY
-+
-CONTEXT FIREWALL
-+
-TOKEN OPTIMIZER
-+
-DIFF FIREWALL
-+
-AI WORKER MANAGER
-
-Models are replaceable.
-
-Repository belongs to developer.
-
-Memory belongs to developer.
-
-Decisions belong to developer.
-
-Tasks belong to developer.
-
-Git history belongs to developer.
-
-Claude and Cursor are workers.
 
 ctxd is the persistent engineering layer.
 
-============================================================
-87. FINAL OPTIMIZATION PRINCIPLE
-============================================================
+Claude is a worker.
 
-Never optimize for:
+Cursor is a worker.
 
-"send the smallest possible context."
+Future models are workers.
 
-Optimize for:
+Local models are workers.
 
-"send the smallest context that still contains enough information
-to correctly complete the task."
+The repository belongs to the developer.
 
-Never optimize for:
+Memory belongs to the developer.
 
-"make the smallest possible diff."
+Tasks belong to the developer.
 
-Optimize for:
+Decisions belong to the developer.
 
-"make the smallest necessary change that correctly solves the task."
+Git belongs to the developer.
 
-Never optimize for:
+ctxd coordinates them.
 
-"produce the shortest possible explanation."
+The core remains:
 
-Optimize for:
-
-"produce the shortest explanation that communicates everything
-the developer actually needs to know."
-
-Therefore the ultimate objective is:
-
-MINIMUM USEFUL CONTEXT
-+
-MINIMUM NECESSARY CHANGE
-+
-MINIMUM USEFUL OUTPUT
-+
-MAXIMUM RELEVANT INFORMATION
-+
-MAXIMUM CORRECTNESS
+LOCAL
+PRIVATE
+OFFLINE-CAPABLE
+PROVIDER-INDEPENDENT
+NO TELEMETRY
+NO CLOUD BY DEFAULT
 
 ============================================================
-88. PRIVACY PRINCIPLE
+43. START NOW
 ============================================================
 
-Never sacrifice local privacy for convenience.
+DO NOT ask me to restate this.
 
-Default:
+DO NOT start rebuilding ctxd from zero.
 
-local
-private
-offline-capable
-no telemetry
-no cloud
-no secret indexing
+START WITH:
 
-External AI calls must happen only through explicitly configured
-workers/integrations.
+1. Inspect the actual repository.
+2. Audit all existing functionality.
+3. Build the implementation matrix.
+4. Identify the exact 2.0 delta.
+5. Correct stale documentation.
+6. Implement UI-1 event transport.
+7. Implement real worker state.
+8. Build the central graph.
+9. Connect the graph to real events.
+10. Surface the existing Change Firewall.
+11. Add /api/stats where missing.
+12. Add verification freshness.
+13. Add graph interaction.
+14. Add Tauri only after the web UI is complete.
+15. Run the complete test suite.
+16. Report actual results.
 
-Do not silently upload project data anywhere.
+DO NOT:
 
-Compression does NOT mean deletion.
+- rebuild existing features
+- create fake data
+- add cloud services
+- add telemetry
+- add embeddings just for the UI
+- add an LLM just to calculate statistics
+- create a second frontend
+- create a giant graph dependency without justification
+- make Tauri the foundation
+- expose unrestricted shell execution
+- automatically delete worker changes
+- hide uncertainty
 
-Archive useful information locally.
+The first milestone is:
 
-Retrieve selectively.
+REAL EVENTS
+↓
+REAL WORKER STATES
+↓
+CENTRAL ctxd GRAPH
+↓
+REAL CONTEXT FLOW
+↓
+REAL CHANGE FIREWALL
+↓
+REAL TOKEN MONITOR
 
-Compress for the model.
+The final product should feel like a developer has a
+small engineering organization living inside their computer:
 
-Preserve the original.
+             CURSOR
+                \
+                 \
+                  ctxd
+                 / | \
+                /  |  \
+           CLAUDE MEMORY REPO
+                 |
+            VERIFICATION
 
-============================================================
-89. FIRST PROOF
-============================================================
+ctxd remembers.
+ctxd filters.
+ctxd coordinates.
+ctxd measures.
+ctxd protects.
+ctxd verifies.
 
-Do not measure success by the beauty of the UI.
+The AI workers do the coding.
 
-The first proof that ctxd works is:
+ctxd manages the engineering context around them.
 
-A developer has a large amount of local project knowledge.
-
-ctxd understands the task.
-
-ctxd identifies relevant information.
-
-ctxd removes unnecessary information.
-
-ctxd preserves important information.
-
-ctxd builds compact context.
-
-ctxd explains exactly what it included and why.
-
-Claude/Cursor can work effectively with that context.
-
-The developer does not repeatedly explain the project.
-
-Then the worker makes changes.
-
-ctxd analyzes the diff.
-
-ctxd detects unnecessary changes.
-
-ctxd detects formatting/comment noise.
-
-ctxd detects unrelated edits.
-
-ctxd verifies the actual change.
-
-ctxd produces a concise result.
-
-That is the foundation.
-
-============================================================
-90. FIRST IMPLEMENTATION ACTION
-============================================================
-
-Start now.
-
-Do NOT ask for clarification unless the repository contains
-a genuinely blocking ambiguity that cannot be resolved from this
-specification.
-
-First:
-
-1. Inspect repository/environment.
-2. Create Phase 1 implementation plan.
-3. Create monorepo.
-4. Implement foundation.
-5. Run tests.
-6. Run typecheck.
-7. Run ctxd doctor.
-8. Run ctxd status.
-9. Verify Phase 1.
-10. Immediately implement Phase 1.5.
-11. Create 50k+ token benchmark fixture.
-12. Implement deterministic Context Firewall.
-13. Generate Context Receipts.
-14. Run golden benchmark.
-15. Verify actual results.
-16. Only then proceed to Phase 2.
-
-Do not build UI yet.
-
-Do not add cloud.
-
-Do not add embeddings.
-
-Do not add LLM-dependent compression.
-
-Do not build autonomous agents yet.
-
-Do not over-engineer.
-
-Build the smallest correct system first.
-
-But do NOT choose a weak algorithm merely because it is easy.
-
-Where an algorithm is important to the core product, design the
-interface and scoring model so it can be improved without rewriting
-the architecture.
-
-The Context Firewall and Diff Firewall are the core intellectual
-property of ctxd.
-
-Build them cleanly.
-
-============================================================
-91. FINAL DEFINITION OF SUCCESS
-============================================================
-
-ctxd succeeds when this becomes possible:
-
-Developer:
-
-"Fix Stripe webhook idempotency."
-
-ctxd:
-
-- understands the task
-- searches local engineering memory
-- identifies relevant files
-- identifies relevant decisions
-- identifies relevant rules
-- removes duplicate information
-- removes unrelated information
-- compresses large files deterministically
-- creates <= budget context
-- produces Context Receipt
-
-Worker:
-
-- receives only useful context
-- implements the fix
-- avoids unrelated refactoring
-- produces concise output
-
-ctxd:
-
-- inspects Git diff
-- calculates change surface
-- detects formatting noise
-- detects unnecessary comments
-- detects unrelated files
-- verifies tests/typecheck/build
-- creates Change Receipt
-- records important decision
-- updates task
-- creates checkpoint
-- preserves history
-
-Developer receives:
-
-WHAT CHANGED
-WHY
-VERIFICATION
-WHAT NEEDS REVIEW
-
-Nothing important is lost.
-
-Nothing unnecessary is repeatedly sent.
-
-That is ctxd.
-
-BUILD IT.
+BUILD THIS.
