@@ -74,15 +74,15 @@ describe("ctxd desktop (UI-10)", () => {
     assert.match(output, /cargo build/);
   });
 
-  it("rejects a port outside the valid range", () => {
-    const { output, status } = ctxd(["desktop", "--port", "99999", "--no-window"]);
-    assert.equal(status, 1);
-    assert.match(output, /--port must be between 0 and 65535/);
-  });
+  it("rejects bad input rather than ignoring it", () => {
+    // Both checks share this test because each costs a process spawn, and this
+    // file already runs alongside the rest of the suite in parallel. Test load
+    // is not free: it is what starves the polling in the event-stream tests.
+    const port = ctxd(["desktop", "--port", "99999", "--no-window"]);
+    assert.equal(port.status, 1);
+    assert.match(port.output, /--port must be between 0 and 65535/);
 
-  it("rejects an unknown flag rather than ignoring it", () => {
-    const { status } = ctxd(["desktop", "--wat"]);
-    assert.equal(status, 1);
+    assert.equal(ctxd(["desktop", "--wat"]).status, 1);
   });
 
   it("serves the same loopback API without a window", async () => {
@@ -126,16 +126,15 @@ describe("ctxd desktop (UI-10)", () => {
   });
 
   it("leaves every other command working whether or not the shell is built", () => {
-    // The point of §67: the shell is packaging. `ctxd status` and `ctxd doctor`
-    // must not care that a Rust binary is missing, or the desktop build would
-    // have become a dependency of the CLI rather than a wrapper around it.
+    // The point of §67: the shell is packaging. An unrelated command must not
+    // care that a Rust binary is missing, or the desktop build would have
+    // become a dependency of the CLI rather than a wrapper around it.
+    //
+    // `status` rather than `doctor`: it proves the same thing and `doctor` runs
+    // every environment check, which is the slowest command in the suite.
     const status = ctxd(["status"]);
     assert.equal(status.status, 0);
     assert.match(status.output, /ctxd/);
-
-    const doctor = ctxd(["doctor"]);
-    // doctor may report environment problems; what matters is that it ran and
-    // said nothing about a desktop shell.
-    assert.doesNotMatch(doctor.output, /desktop/i);
+    assert.doesNotMatch(status.output, /desktop/i);
   });
 });

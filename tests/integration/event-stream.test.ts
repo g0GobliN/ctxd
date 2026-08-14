@@ -54,12 +54,24 @@ after(async () => {
  *
  * Always aborts before resolving: a test that leaves a stream open does not
  * fail the runner, it hangs it.
+ *
+ * The budget is deliberately far larger than the latency being tested. The
+ * stream polls SQLite every 500ms, so delivery normally takes well under a
+ * second — but `node --test` runs files in parallel, and under that load the
+ * poll loop can be scheduled late enough to blow a tight budget. This once sat
+ * at 5s, which passed alone, passed on an idle machine, and failed on a busy
+ * one: a flake that would land on CI runners with fewer cores than a
+ * developer's laptop.
+ *
+ * A generous timeout costs nothing when the assertion holds and still fails in
+ * bounded time when it does not. What must never be relaxed is the assertion
+ * itself — this bounds how long the test waits, never what it accepts.
  */
 async function collect(
   path: string,
   until: (text: string) => boolean,
   headers: Record<string, string> = {},
-  timeoutMs = 5_000,
+  timeoutMs = 30_000,
 ): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
