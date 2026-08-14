@@ -23,6 +23,7 @@ import {
 } from "@ctxd/stats";
 import { HttpError, optionalInt, optionalString, requireString, type Route } from "./http.js";
 import { createEventRoutes } from "./events.js";
+import { createWriteRoutes } from "./writes.js";
 import { buildGraph } from "./graph.js";
 import { listReceipts } from "./receipts.js";
 import { projectIdFor } from "./project-scope.js";
@@ -403,5 +404,6 @@ export function createRoutes(context: RouteContext): Route[] {
     },
 
     ...createEventRoutes(context),
+    ...createWriteRoutes(context),
   ];
 }

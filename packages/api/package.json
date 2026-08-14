@@ -10,6 +10,7 @@
     }
   },
   "dependencies": {
+    "@ctxd/agent": "workspace:*",
     "@ctxd/context": "workspace:*",
     "@ctxd/core": "workspace:*",
     "@ctxd/db": "workspace:*",

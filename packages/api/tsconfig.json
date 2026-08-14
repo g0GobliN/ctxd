@@ -6,6 +6,7 @@
   },
   "include": ["src/**/*.ts"],
   "references": [
+    { "path": "../agent" },
     { "path": "../context" },
     { "path": "../core" },
     { "path": "../db" },
