@@ -10,9 +10,11 @@
     { "path": "../core" },
     { "path": "../db" },
     { "path": "../diff" },
+    { "path": "../events" },
     { "path": "../firewall" },
     { "path": "../memory" },
     { "path": "../project" },
+    { "path": "../stats" },
     { "path": "../utils" },
     { "path": "../verify" },
     { "path": "../work" }

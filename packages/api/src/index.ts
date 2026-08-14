@@ -18,9 +18,14 @@ export {
   type Route,
   type RouteHandler,
   type RouteRequest,
+  type StreamHandler,
+  type StreamSubscription,
 } from "./http.js";
 
-export { createRoutes, type RouteContext } from "./routes.js";
+export { createRoutes } from "./routes.js";
+export type { RouteContext } from "./context.js";
+export { createEventRoutes, MAX_SUBSCRIBERS } from "./events.js";
+export { projectIdFor } from "./project-scope.js";
 
 export {
   defaultUiRoot,

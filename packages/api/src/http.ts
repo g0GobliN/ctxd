@@ -5,7 +5,7 @@
  * couple of dozen local routes.
  */
 
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 
 /** Largest request body accepted, so a local process cannot exhaust memory. */
 export const MAX_BODY_BYTES = 1024 * 1024;
@@ -16,9 +16,27 @@ export interface RouteRequest {
   readonly query: URLSearchParams;
   /** Parsed JSON body, or undefined when there was none. */
   readonly body: unknown;
+  /** Request headers. The event stream reads `Last-Event-ID` from here. */
+  readonly headers: IncomingHttpHeaders;
 }
 
 export type RouteHandler = (request: RouteRequest) => Promise<unknown> | unknown;
+
+/**
+ * An open response the server must be able to end on shutdown.
+ *
+ * Every other route answers and closes. A stream stays open until the client
+ * leaves or the server stops, so the server has to hold a handle to it —
+ * an unclosed stream keeps a Node process alive, and `ctxd ui` must still exit.
+ */
+export interface StreamSubscription {
+  close(): void;
+}
+
+export type StreamHandler = (
+  request: RouteRequest,
+  response: ServerResponse,
+) => StreamSubscription;
 
 export interface Route {
   readonly method: string;
@@ -26,6 +44,13 @@ export interface Route {
   /** Mutating routes require the local token (§62). */
   readonly mutating: boolean;
   readonly handler: RouteHandler;
+  /**
+   * Takes over the response instead of answering with JSON.
+   *
+   * When set, `handler` is not called: the route writes to the response itself
+   * and keeps it open.
+   */
+  readonly stream?: StreamHandler;
 }
 
 /** An error carrying the status code it should produce. */

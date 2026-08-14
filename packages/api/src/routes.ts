@@ -6,86 +6,32 @@
  * it turns a request into a service call and a service result into JSON.
  */
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
-import { VERSION, type Config, type CtxdPaths } from "@ctxd/core";
+import { VERSION } from "@ctxd/core";
 import { analyzeWorkingTree, isGitRepository } from "@ctxd/diff";
 import { buildProjectContext } from "@ctxd/firewall";
 import { listMemories, searchMemories } from "@ctxd/memory";
 import { describeGit, inspectGit, listProjects } from "@ctxd/project";
 import { buildResume, lastSession, listTasks, latestCheckpoint } from "@ctxd/work";
 import { KNOWN_WORKERS } from "@ctxd/verify";
-import type { Db } from "@ctxd/db";
+import { emitEvent, workerConnections } from "@ctxd/events";
 import {
-  HttpError,
-  optionalInt,
-  optionalString,
-  requireString,
-  type Route,
-  type RouteRequest,
-} from "./http.js";
+  collectStats,
+  describeWindow,
+  isStatsWindow,
+  STATS_WINDOWS,
+  windowSince,
+} from "@ctxd/stats";
+import { HttpError, optionalInt, optionalString, requireString, type Route } from "./http.js";
+import { createEventRoutes } from "./events.js";
+import { buildGraph } from "./graph.js";
+import { listReceipts } from "./receipts.js";
+import { projectIdFor } from "./project-scope.js";
+import type { RouteContext } from "./context.js";
 
-export interface RouteContext {
-  readonly db: Db;
-  readonly paths: CtxdPaths;
-  readonly config: Config;
-  /** Directory the UI is inspecting; defaults to the process working directory. */
-  readonly dir: string;
-}
+export type { RouteContext };
 
 /** How many receipts a listing returns before the caller must ask for more. */
 const RECEIPT_PAGE = 50;
-
-function projectIdFor(context: RouteContext, request: RouteRequest): string {
-  const supplied = request.query.get("project");
-  if (supplied !== null && supplied !== "") return supplied;
-
-  const projects = listProjects(context.db);
-  const first = projects[0];
-  if (first === undefined) {
-    throw new HttpError(404, "no project is registered — run: ctxd init");
-  }
-  return first.id;
-}
-
-/**
- * List receipt files newest-first.
- *
- * Reads the directory rather than the database because receipts are files by
- * design: they stay readable and portable without ctxd (§74).
- */
-function listReceipts(directory: string, limit: number): unknown[] {
-  let names: string[];
-  try {
-    names = readdirSync(directory).filter((name) => name.endsWith(".json"));
-  } catch {
-    return [];
-  }
-
-  const entries = names
-    .map((name) => {
-      const path = join(directory, name);
-      try {
-        return { name, path, mtime: statSync(path).mtimeMs };
-      } catch {
-        return undefined;
-      }
-    })
-    .filter((entry): entry is { name: string; path: string; mtime: number } => entry !== undefined)
-    .sort((a, b) => b.mtime - a.mtime)
-    .slice(0, limit);
-
-  const receipts: unknown[] = [];
-  for (const entry of entries) {
-    try {
-      receipts.push(JSON.parse(readFileSync(entry.path, "utf8")));
-    } catch {
-      // A corrupt receipt is skipped rather than failing the whole listing;
-      // the others are still worth showing.
-    }
-  }
-  return receipts;
-}
 
 /**
  * Build the route table.
@@ -177,11 +123,40 @@ export function createRoutes(context: RouteContext): Route[] {
       // §69. Status is derived from recorded sessions, never inferred: a
       // worker ctxd has not seen reads as "unknown" rather than "idle", because
       // claiming a worker is idle when nothing was recorded would be a guess.
+      //
+      // `state` keeps its original meaning — what the session history says —
+      // and `connection` is added alongside it from the event log. They answer
+      // different questions ("has this worker worked here?" versus "is it
+      // attached right now?") and collapsing them would lose one of the two.
       method: "GET",
       path: "/api/workers",
       mutating: false,
       handler: (request) => {
         const projectId = projectIdFor(context, request);
+        const connections = new Map(
+          workerConnections(db, projectId).map((entry) => [entry.claimedWorker, entry]),
+        );
+
+        /**
+         * The live half of a worker's row.
+         *
+         * `claimed: true` travels with it so no consumer can read the name as
+         * something ctxd verified — the transport reports an attachment, never
+         * an identity (§6).
+         */
+        const connectionFor = (id: string) => {
+          const found = connections.get(id);
+          if (found === undefined) {
+            return { state: "unknown", since: null, lastActivityAt: null, openEnded: false, claimed: true };
+          }
+          return {
+            state: found.state,
+            since: found.since,
+            lastActivityAt: found.lastActivityAt,
+            openEnded: found.openEnded,
+            claimed: true,
+          };
+        };
         const sessions = db
           .prepare(
             `SELECT worker, task_id, started_at, ended_at, summary
@@ -215,6 +190,7 @@ export function createRoutes(context: RouteContext): Route[] {
             currentTask: latest?.ended_at === null ? (latest.task_id ?? null) : null,
             lastTask: latest?.task_id ?? null,
             lastSummary: latest?.summary ?? null,
+            connection: connectionFor(definition.id),
           };
         });
 
@@ -230,9 +206,30 @@ export function createRoutes(context: RouteContext): Route[] {
           currentTask: latest.ended_at === null ? (latest.task_id ?? null) : null,
           lastTask: latest.task_id ?? null,
           lastSummary: latest.summary ?? null,
+          connection: connectionFor(id),
         }));
 
-        return { workers: [...known, ...others] };
+        // A worker seen only on the event log has never opened a session, so it
+        // appears in neither list above. It is still something that connected
+        // to this project, and dropping it would make the interface quieter
+        // than the truth.
+        const accountedFor = new Set([...known, ...others].map((worker) => worker.id));
+        const streamOnly = [...connections.keys()]
+          .filter((id) => !accountedFor.has(id))
+          .map((id) => ({
+            id,
+            name: id,
+            capabilities: [] as readonly string[],
+            state: "unknown",
+            source: "events",
+            lastActivity: connections.get(id)?.lastActivityAt ?? null,
+            currentTask: null,
+            lastTask: null,
+            lastSummary: null,
+            connection: connectionFor(id),
+          }));
+
+        return { workers: [...known, ...others, ...streamOnly] };
       },
     },
 
@@ -287,6 +284,47 @@ export function createRoutes(context: RouteContext): Route[] {
     },
 
     {
+      // The token monitor (UI-7).
+      //
+      // The aggregation is `@ctxd/stats`, the same module `ctxd stats` calls,
+      // so the interface and the CLI cannot report different totals for the
+      // same receipts. The browser used to sum receipts itself; that made the
+      // interface a second place the number could be computed, and therefore a
+      // second place it could be wrong.
+      method: "GET",
+      path: "/api/stats",
+      mutating: false,
+      handler: (request) => {
+        const requested = request.query.get("window") ?? "all";
+        if (!isStatsWindow(requested)) {
+          throw new HttpError(
+            400,
+            `"window" must be one of ${STATS_WINDOWS.join(", ")}`,
+          );
+        }
+
+        const since = windowSince(requested);
+        const limit = optionalInt({ limit: request.query.get("limit") }, "limit");
+
+        const stats = collectStats({
+          contextReceiptsDir: paths.contextReceiptsDir,
+          changeReceiptsDir: paths.changeReceiptsDir,
+          ...(since === undefined ? {} : { since }),
+          ...(limit === undefined ? {} : { limit }),
+        });
+
+        return {
+          // Echoed back so the interface labels what it is showing rather than
+          // whatever tab happens to be highlighted.
+          window: requested,
+          scope: describeWindow(requested),
+          since: since ?? null,
+          ...stats,
+        };
+      },
+    },
+
+    {
       method: "GET",
       path: "/api/diff",
       mutating: false,
@@ -315,6 +353,7 @@ export function createRoutes(context: RouteContext): Route[] {
         const task = requireString(request.body, "task");
         const dir = optionalString(request.body, "dir") ?? context.dir;
         const budget = optionalInt(request.body, "budget") ?? 10000;
+        const worker = optionalString(request.body, "worker");
 
         const result = buildProjectContext({
           task,
@@ -323,7 +362,29 @@ export function createRoutes(context: RouteContext): Route[] {
           db,
           config,
           touchMemories: false,
+          claimedWorker: worker,
         });
+
+        // Recorded so the graph shows context the interface built, not only
+        // context a worker asked for. Counts and the receipt id travel; the
+        // context itself never does.
+        try {
+          emitEvent(db, {
+            projectId: projectIdFor(context, request),
+            type: "context_built",
+            ...(worker === undefined ? {} : { worker }),
+            data: {
+              task,
+              requestId: result.receipt.request_id,
+              candidateTokens: result.receipt.candidate_total_tokens,
+              finalTokens: result.receipt.final_total_tokens,
+              source: "api",
+            },
+          });
+        } catch {
+          // The receipt is the durable record and it is already written. A log
+          // failure must not turn a successful build into an error.
+        }
 
         return {
           receipt: result.receipt,
@@ -331,5 +392,16 @@ export function createRoutes(context: RouteContext): Route[] {
         };
       },
     },
+
+    {
+      // The graph home screen (§4). Assembled here so the interface lays out
+      // what the core decided rather than deciding it in a browser.
+      method: "GET",
+      path: "/api/graph",
+      mutating: false,
+      handler: (request) => buildGraph(context, projectIdFor(context, request)),
+    },
+
+    ...createEventRoutes(context),
   ];
 }

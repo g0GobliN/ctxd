@@ -10,8 +10,15 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { existsSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { ensureToken, isAllowedHost, isAllowedOrigin, tokenFrom, tokensMatch } from "./auth.js";
-import { HttpError, readJsonBody, sendJson, type Route } from "./http.js";
-import { createRoutes, type RouteContext } from "./routes.js";
+import {
+  HttpError,
+  readJsonBody,
+  sendJson,
+  type Route,
+  type StreamSubscription,
+} from "./http.js";
+import { createRoutes } from "./routes.js";
+import type { RouteContext } from "./context.js";
 import { defaultUiRoot, serveStatic } from "./static.js";
 
 export const DEFAULT_HOST = "127.0.0.1";
@@ -59,6 +66,7 @@ async function handle(
   routes: readonly Route[],
   token: string,
   uiRoot: string | undefined,
+  streams: Set<StreamSubscription>,
 ): Promise<void> {
   const method = request.method ?? "GET";
 
@@ -98,7 +106,24 @@ async function handle(
   }
 
   const body = method === "GET" || method === "HEAD" ? undefined : await readJsonBody(request);
-  const result = await route.handler({ method, path: url.pathname, query: url.searchParams, body });
+  const routeRequest = {
+    method,
+    path: url.pathname,
+    query: url.searchParams,
+    body,
+    headers: request.headers,
+  };
+
+  // A stream takes the response over and keeps it open; the server holds a
+  // handle so shutdown can end it rather than waiting on a client.
+  if (route.stream !== undefined) {
+    const subscription = route.stream(routeRequest, response);
+    streams.add(subscription);
+    response.on("close", () => streams.delete(subscription));
+    return;
+  }
+
+  const result = await route.handler(routeRequest);
   sendJson(response, 200, result);
 }
 
@@ -123,10 +148,11 @@ export async function startApiServer(options: ApiServerOptions): Promise<ApiServ
   const uiRoot =
     options.uiRoot === null ? undefined : (options.uiRoot ?? defaultUiRoot(import.meta.url));
   const routes = createRoutes(options);
+  const streams = new Set<StreamSubscription>();
 
   const server = createServer((request, response) => {
     const started = Date.now();
-    handle(request, response, routes, token, uiRoot)
+    handle(request, response, routes, token, uiRoot, streams)
       .catch((error: unknown) => {
         if (error instanceof HttpError) {
           sendJson(response, error.status, { error: error.message });
@@ -163,6 +189,12 @@ export async function startApiServer(options: ApiServerOptions): Promise<ApiServ
     servingUi: uiRoot !== undefined && existsSync(uiRoot),
     close: () =>
       new Promise<void>((resolve) => {
+        // Streams first: `server.close` waits for open connections, and an
+        // event stream is open by design. Without this, `ctxd ui` would hang
+        // for as long as a browser tab stayed on the page.
+        for (const stream of streams) stream.close();
+        streams.clear();
+
         server.close(() => resolve());
         server.closeAllConnections();
       }),

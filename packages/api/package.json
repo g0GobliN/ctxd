@@ -14,9 +14,11 @@
     "@ctxd/core": "workspace:*",
     "@ctxd/db": "workspace:*",
     "@ctxd/diff": "workspace:*",
+    "@ctxd/events": "workspace:*",
     "@ctxd/firewall": "workspace:*",
     "@ctxd/memory": "workspace:*",
     "@ctxd/project": "workspace:*",
+    "@ctxd/stats": "workspace:*",
     "@ctxd/utils": "workspace:*",
     "@ctxd/verify": "workspace:*",
     "@ctxd/work": "workspace:*"
