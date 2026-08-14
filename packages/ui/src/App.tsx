@@ -3,20 +3,23 @@ import { ActivityStream } from "./activity.js";
 import { EngineeringGraph } from "./graph.js";
 import { TokenMonitor } from "./tokens.js";
 import {
+  Agent,
   ChangeInspector,
   ContextInspector,
   Dashboard,
   MemoryViewer,
+  Projects,
   Resume,
   SettingsView,
   TaskBoard,
+  Verification,
   WorkerMonitor,
 } from "./panels.js";
 
 /**
  * The shell.
  *
- * Navigation is component state rather than a router: eight panels do not need
+ * Navigation is component state rather than a router: a dozen panels do not need
  * URL routing, and a router would be the first dependency added for tidiness
  * rather than need.
  */
@@ -26,10 +29,17 @@ const PANELS = [
   // architecture, not an optional extra view of it.
   { id: "graph", label: "Graph", render: () => <EngineeringGraph /> },
   { id: "dashboard", label: "Dashboard", render: () => <Dashboard /> },
+  // Registering a project is where a GUI-first session starts, so it sits
+  // beside the overview rather than buried under settings.
+  { id: "projects", label: "Projects", render: () => <Projects /> },
   { id: "activity", label: "Activity", render: () => <ActivityStream /> },
+  // The loop a developer watches rather than drives: context, routing, worker,
+  // change review. Placed beside Context because it is that panel plus a run.
+  { id: "agent", label: "Agent", render: () => <Agent /> },
   { id: "context", label: "Context", render: () => <ContextInspector /> },
   { id: "tokens", label: "Tokens", render: () => <TokenMonitor /> },
   { id: "changes", label: "Changes", render: () => <ChangeInspector /> },
+  { id: "verify", label: "Verify", render: () => <Verification /> },
   { id: "memory", label: "Memory", render: () => <MemoryViewer /> },
   { id: "tasks", label: "Tasks", render: () => <TaskBoard /> },
   { id: "resume", label: "Resume", render: () => <Resume /> },

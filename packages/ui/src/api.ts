@@ -141,7 +141,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string): Promise<T> {
-  const response = await fetch(path, { headers: { accept: "application/json" } });
+  const response = await fetch(scoped(path), { headers: { accept: "application/json" } });
   const payload = (await response.json()) as T & { error?: string };
 
   if (!response.ok) {
@@ -248,6 +248,170 @@ export interface Stats {
   readonly unreadable: readonly string[];
 }
 
+/*
+ * Writes (2.1)
+ * -----------------------------------------------------------------------------
+ *
+ * Mutating routes require the local API token (§62). The interface is served
+ * over HTTP like any other page, so it does not receive the token
+ * automatically — the developer supplies it once from `ctxd ui --print-token`
+ * and it is kept in `localStorage`.
+ *
+ * Injecting the token into the served HTML instead would remove that step, and
+ * would also mean any local process able to `GET /` could read a credential
+ * that currently requires reading a `0600` file. The paste is the cheaper
+ * price.
+ */
+
+const TOKEN_KEY = "ctxd.apiToken";
+const PROJECT_KEY = "ctxd.project";
+
+/**
+ * Which project the interface is looking at.
+ *
+ * Empty means "let the server decide", which resolves to the directory it was
+ * started on. Choosing one here is what stops the window being tied to
+ * whatever `ctxd desktop --dir` pointed at, so a person can register several
+ * projects and move between them without restarting anything.
+ */
+export function selectedProject(): string {
+  try {
+    return localStorage.getItem(PROJECT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function selectProject(id: string): void {
+  try {
+    if (id === "") localStorage.removeItem(PROJECT_KEY);
+    else localStorage.setItem(PROJECT_KEY, id);
+  } catch {
+    // Storage unavailable; the server's own default still applies.
+  }
+}
+
+/** Append the chosen project to a path, preserving any query it already has. */
+function scoped(path: string): string {
+  const project = selectedProject();
+  if (project === "") return path;
+  return `${path}${path.includes("?") ? "&" : "?"}project=${encodeURIComponent(project)}`;
+}
+
+export function storedToken(): string {
+  try {
+    return localStorage.getItem(TOKEN_KEY) ?? "";
+  } catch {
+    // Storage can be unavailable (private mode, disabled cookies). Writes then
+    // fail with a 401 that says what to do, which beats crashing the panel.
+    return "";
+  }
+}
+
+export function storeToken(token: string): void {
+  try {
+    if (token.trim() === "") localStorage.removeItem(TOKEN_KEY);
+    else localStorage.setItem(TOKEN_KEY, token.trim());
+  } catch {
+    // As above.
+  }
+}
+
+async function mutate<T>(path: string, method: string, body: unknown): Promise<T> {
+  const token = storedToken();
+  const project = selectedProject();
+
+  // The chosen project travels in the body, which is where the write routes
+  // look first. A write must never land in a different project from the one
+  // the panels were showing when the developer pressed the button.
+  const scopedBody =
+    project === "" || (body as { project?: unknown })?.project !== undefined
+      ? body
+      : { ...(body as Record<string, unknown>), project };
+
+  const response = await fetch(path, {
+    method,
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      ...(token === "" ? {} : { authorization: `Bearer ${token}` }),
+    },
+    body: JSON.stringify(scopedBody),
+  });
+
+  const payload = (await response.json()) as T & { error?: string };
+  if (!response.ok) {
+    // 401 is the one worth naming: it means the token is missing or stale, and
+    // the fix is a specific command rather than a retry.
+    const message =
+      response.status === 401
+        ? "this action needs the local API token — add it in Settings (ctxd ui --print-token)"
+        : (payload.error ?? `request failed (${response.status})`);
+    throw new ApiError(response.status, message);
+  }
+  return payload;
+}
+
+export interface AgentRunner {
+  readonly id: string;
+  readonly name: string;
+  /** False for a worker ctxd cannot start; `detail` says why. */
+  readonly available: boolean;
+  readonly detail?: string;
+}
+
+export interface AgentRun {
+  readonly task: string;
+  readonly routing: {
+    readonly worker: string;
+    readonly model: string;
+    /** Every choice carries its reason, as context receipts do. */
+    readonly reasons: readonly string[];
+  };
+  readonly contextReceipt: ContextReceipt;
+  readonly worker: {
+    readonly ok: boolean;
+    readonly result: string;
+    readonly turns?: number;
+    readonly durationMs: number;
+    /** Reported by the worker. On a subscription this is notional, not a bill. */
+    readonly reportedCostUsd?: number;
+    readonly error?: string;
+  };
+  /** Present only when the worker was allowed to edit. */
+  readonly change?: ChangeReceipt;
+}
+
+export interface VerificationCheck {
+  readonly kind: string;
+  /** A skipped check is never rendered as a pass (§13). */
+  readonly status: string;
+  readonly command: string;
+  readonly exitCode?: number;
+  readonly durationMs: number;
+  readonly detail: string;
+  /** Kept only for failures — a pass has nothing to explain. */
+  readonly output?: string;
+}
+
+export interface VerificationResult {
+  readonly status: string;
+  readonly checks: readonly VerificationCheck[];
+  readonly violations: readonly { readonly rule: string; readonly detail: string }[];
+  readonly changedFiles: readonly string[];
+  readonly reasons: readonly string[];
+  readonly timestamp: string;
+}
+
+export interface SaveMemoryBody {
+  readonly title: string;
+  readonly content: string;
+  readonly type?: string;
+  readonly source?: string;
+  readonly importance?: string;
+  readonly tags?: readonly string[];
+}
+
 export const api = {
   status: () => request<Status>("/api/status"),
   graph: () => request<CtxdGraph>("/api/graph"),
@@ -269,6 +433,52 @@ export const api = {
     request<ChangeReceipt>(
       task.trim() === "" ? "/api/diff" : `/api/diff?task=${encodeURIComponent(task)}`,
     ),
+
+  // Writes. Each one is the route that calls the same core function the
+  // equivalent CLI command calls — see api.md.
+  saveMemory: (body: SaveMemoryBody) =>
+    mutate<{ outcome: string; memory: Memory; supersedes?: string }>(
+      "/api/memory",
+      "POST",
+      body,
+    ),
+  createTask: (body: { title: string; description?: string; priority?: string }) =>
+    mutate<Task>("/api/tasks", "POST", body),
+  updateTask: (body: { id: string; status?: string; priority?: string; worker?: string }) =>
+    mutate<Task>("/api/tasks", "PATCH", body),
+  startSession: (body: { worker?: string; task?: string }) =>
+    mutate<{ id: string }>("/api/session", "POST", body),
+  createCheckpoint: (body: { next?: string; objective?: string; worker?: string }) =>
+    mutate<{ id: string }>("/api/checkpoint", "POST", body),
+  buildContext: (body: { task: string; budget?: number; worker?: string }) =>
+    mutate<{ receipt: ContextReceipt; warnings: readonly string[] }>(
+      "/api/context",
+      "POST",
+      body,
+    ),
+  agentRunners: () => request<{ runners: AgentRunner[] }>("/api/agent"),
+  runAgent: (body: {
+    task: string;
+    budget?: number;
+    worker?: string;
+    model?: string;
+    applyEdits?: boolean;
+  }) => mutate<AgentRun>("/api/agent", "POST", body),
+  verify: (body: { dryRun?: boolean; only?: readonly string[]; timeoutMs?: number }) =>
+    mutate<VerificationResult>("/api/verify", "POST", body),
+  handoff: (body: { to?: string; from?: string; task?: string; note?: string }) =>
+    mutate<{ moved: boolean; toWorker?: string; warnings?: readonly string[] }>(
+      "/api/handoff",
+      "POST",
+      body,
+    ),
+  registerProject: (body: { dir: string; index?: boolean }) =>
+    mutate<{
+      outcome: string;
+      project: Project;
+      evidence: readonly string[];
+      indexed?: { total: number; added: number; updated: number; unchanged: number; removed: number };
+    }>("/api/projects", "POST", body),
 };
 
 export interface WorkerConnection {

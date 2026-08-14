@@ -1,20 +1,54 @@
 /**
  * The interface panels (§68–71).
  *
- * The interface is a viewer, not a second brain: it renders what the core
- * services already decided and never recomputes a verdict of its own. Anything
- * shown here can be obtained from the CLI, and it agrees with the CLI because
- * both read the same receipts.
+ * The interface never decides anything: it renders what the core services
+ * already decided and never recomputes a verdict of its own. Anything shown
+ * here can be obtained from the CLI, and it agrees with the CLI because both
+ * read the same receipts.
+ *
+ * Since 2.1 the panels can also write, through routes that call the same core
+ * functions the CLI calls (see api.md). A write never interprets its own
+ * result: a refusal is shown with the reason the core gave, not softened or
+ * retried.
  */
 
 import { useState, type ReactNode } from "react";
 import {
   api,
+  selectedProject,
+  selectProject,
+  storedToken,
+  storeToken,
+  type AgentRun,
   type ChangeReceipt,
   type ContextReceipt,
+  type VerificationResult,
   type WorkerConnection,
 } from "./api.js";
 import { formatTime, Panel, Stat, useApi, verdictTone } from "./common.js";
+
+/* Writing ------------------------------------------------------------------- */
+
+/**
+ * The outcome of a write, shown verbatim.
+ *
+ * Refusals matter more than successes here. `saveMemory` can decline a write
+ * whose authority is too low to override what is recorded, and that answer is
+ * the product working correctly — so it is rendered as a stated reason rather
+ * than as a failure the developer should retry past.
+ */
+function WriteResult(props: { message: string; tone: "ok" | "refused" }): ReactNode {
+  return (
+    <p className={props.tone === "ok" ? "reason" : "warning"} role="status">
+      {props.message}
+    </p>
+  );
+}
+
+/** Turn a thrown ApiError into something worth reading. */
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : "the write failed";
+}
 
 /* Dashboard ---------------------------------------------------------------- */
 
@@ -67,22 +101,80 @@ export function Dashboard(): ReactNode {
 /* Context inspector (§68) --------------------------------------------------- */
 
 export function ContextInspector(): ReactNode {
-  const { data, error, loading } = useApi(() => api.contextReceipts());
+  const { data, error, loading, refresh } = useApi(() => api.contextReceipts());
   const [selected, setSelected] = useState(0);
+
+  const [task, setTask] = useState("");
+  const [budget, setBudget] = useState("10000");
+  const [building, setBuilding] = useState(false);
+  const [failure, setFailure] = useState<string | undefined>();
 
   const receipts = data?.receipts ?? [];
   const receipt: ContextReceipt | undefined = receipts[selected];
+
+  /**
+   * Build context for a task, then show its receipt.
+   *
+   * The new receipt is the newest, and the listing is newest-first, so the
+   * selection resets to the top rather than leaving the panel showing the
+   * previous build while claiming to have run a new one.
+   */
+  const build = async (): Promise<void> => {
+    setBuilding(true);
+    setFailure(undefined);
+    try {
+      const parsed = Number.parseInt(budget, 10);
+      await api.buildContext({
+        task,
+        budget: Number.isInteger(parsed) && parsed > 0 ? parsed : 10000,
+      });
+      setSelected(0);
+      refresh();
+    } catch (problem) {
+      setFailure(describeError(problem));
+    } finally {
+      setBuilding(false);
+    }
+  };
 
   return (
     <>
       <h1>Context inspector</h1>
       <p className="subtitle">Why every token was sent — and why the rest was not.</p>
 
+      <div className="toolbar">
+        <input
+          type="text"
+          placeholder="Task — what are you about to work on?"
+          value={task}
+          onChange={(event) => setTask(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && task.trim() !== "") void build();
+          }}
+        />
+        <input
+          type="number"
+          min={1}
+          step={1000}
+          aria-label="Token budget"
+          value={budget}
+          onChange={(event) => setBudget(event.target.value)}
+        />
+        <button
+          className="button"
+          disabled={building || task.trim() === ""}
+          onClick={() => void build()}
+        >
+          {building ? "Building…" : "Build context"}
+        </button>
+      </div>
+      {failure !== undefined ? <WriteResult message={failure} tone="refused" /> : null}
+
       <Panel
         loading={loading}
         error={error}
         empty={receipts.length === 0}
-        emptyMessage="No context receipts yet. Run: ctxd context --task …"
+        emptyMessage="No context receipts yet. Build one above, or run: ctxd context --task …"
       >
         {receipts.length > 1 && (
           <div className="toolbar">
@@ -518,10 +610,100 @@ function CommentNoise(props: { receipt: ChangeReceipt }): ReactNode {
 
 /* Memory (§67) -------------------------------------------------------------- */
 
+const MEMORY_TYPES = ["DECISION", "CONSTRAINT", "BUG", "RULE", "NOTE"] as const;
+
+/**
+ * Record a memory (`ctxd memory add`).
+ *
+ * `source` defaults to `accepted_decision` because the person typing here is
+ * the developer, not a worker — the same default the CLI uses. See api.md for
+ * why the interface is allowed sources the MCP surface refuses.
+ */
+function MemoryComposer(props: { onSaved: () => void }): ReactNode {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [type, setType] = useState<string>("DECISION");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ message: string; tone: "ok" | "refused" } | undefined>();
+
+  const submit = async (): Promise<void> => {
+    setBusy(true);
+    setResult(undefined);
+    try {
+      const saved = await api.saveMemory({ title, content, type });
+      const message =
+        saved.outcome === "superseded"
+          ? `Recorded, superseding ${saved.supersedes ?? "the previous version"}.`
+          : saved.outcome === "unchanged"
+            ? "Already recorded; nothing changed."
+            : "Recorded.";
+      setResult({ message, tone: "ok" });
+      setTitle("");
+      setContent("");
+      props.onSaved();
+    } catch (error) {
+      // A 409 is an authority refusal, which is the core doing its job.
+      setResult({ message: describeError(error), tone: "refused" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <div className="toolbar">
+        <button className="button" onClick={() => setOpen(true)}>
+          Record a memory
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="row">
+      <div className="toolbar">
+        <input
+          type="text"
+          placeholder="Title — what a future session needs to know"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+        />
+        <select value={type} onChange={(event) => setType(event.target.value)}>
+          {MEMORY_TYPES.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </div>
+      <textarea
+        rows={4}
+        placeholder="Why — the reasoning the code cannot show"
+        value={content}
+        onChange={(event) => setContent(event.target.value)}
+      />
+      <div className="toolbar">
+        <button
+          className="button"
+          disabled={busy || title.trim() === "" || content.trim() === ""}
+          onClick={() => void submit()}
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+        <button className="button" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+      {result !== undefined ? <WriteResult message={result.message} tone={result.tone} /> : null}
+    </div>
+  );
+}
+
 export function MemoryViewer(): ReactNode {
   const [query, setQuery] = useState("");
   const [applied, setApplied] = useState("");
-  const { data, error, loading } = useApi(() => api.memories(applied), [applied]);
+  const { data, error, loading, refresh } = useApi(() => api.memories(applied), [applied]);
 
   const memories = data?.hits ?? data?.memories ?? [];
 
@@ -545,11 +727,13 @@ export function MemoryViewer(): ReactNode {
         </button>
       </div>
 
+      <MemoryComposer onSaved={refresh} />
+
       <Panel
         loading={loading}
         error={error}
         empty={memories.length === 0}
-        emptyMessage="No memories recorded yet. Run: ctxd memory add …"
+        emptyMessage="No memories recorded yet. Record one above, or run: ctxd memory add …"
       >
         <div className="rows">
           {memories.map((memory) => (
@@ -572,24 +756,426 @@ export function MemoryViewer(): ReactNode {
   );
 }
 
+/* Projects ------------------------------------------------------------------ */
+
+/**
+ * Register a directory and list what is registered (`ctxd init`).
+ *
+ * This panel is what makes the window a starting point rather than a second
+ * screen for something the terminal had to set up first: without it, a person
+ * who prefers a GUI still had to open a shell before ctxd knew any project
+ * existed.
+ */
+export function Projects(): ReactNode {
+  const { data, error, loading, refresh } = useApi(() => api.projects());
+  const projects = data?.projects ?? [];
+
+  const [dir, setDir] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [chosen, setChosen] = useState(selectedProject());
+  const [result, setResult] = useState<{ message: string; tone: "ok" | "refused" } | undefined>();
+
+  const register = async (): Promise<void> => {
+    setBusy(true);
+    setResult(undefined);
+    try {
+      const done = await api.registerProject({ dir });
+      const counted =
+        done.indexed === undefined ? "" : ` — ${done.indexed.total} files indexed`;
+      setResult({
+        message: `${done.outcome === "registered" ? "Registered" : "Refreshed"} ${done.project.name}${counted}.`,
+        tone: "ok",
+      });
+      setDir("");
+      refresh();
+    } catch (problem) {
+      setResult({ message: describeError(problem), tone: "refused" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <h1>Projects</h1>
+      <p className="subtitle">
+        What ctxd is tracking. Detection reads real manifest files — never
+        directory names.
+        {chosen === ""
+          ? " Every panel follows the directory this window was opened on."
+          : " Every panel is pinned to the project marked in view."}
+      </p>
+
+      <div className="toolbar">
+        <input
+          type="text"
+          placeholder="Absolute path to a project directory…"
+          value={dir}
+          onChange={(event) => setDir(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && dir.trim() !== "") void register();
+          }}
+        />
+        <button className="button" disabled={busy || dir.trim() === ""} onClick={() => void register()}>
+          {busy ? "Registering…" : "Register"}
+        </button>
+      </div>
+      {result !== undefined ? <WriteResult message={result.message} tone={result.tone} /> : null}
+
+      <Panel
+        loading={loading}
+        error={error}
+        empty={projects.length === 0}
+        emptyMessage="No projects registered yet. Add a directory above."
+      >
+        <div className="rows">
+          {projects.map((project) => {
+            const active = project.id === chosen;
+            return (
+              <div className="row" key={project.id}>
+                <div className="row-head">
+                  <strong>{project.name}</strong>
+                  <span className="tag">{active ? "in view" : (project.language ?? "unknown")}</span>
+                </div>
+                <div className="path">{project.root}</div>
+                <div className="reason">
+                  {project.id}
+                  {project.framework != null ? ` · ${project.framework}` : ""}
+                  {project.package_manager != null ? ` · ${project.package_manager}` : ""}
+                </div>
+                <button
+                  className="button"
+                  onClick={() => {
+                    // Reads and writes both follow this, so switching cannot
+                    // leave the panels showing one project while a write lands
+                    // in another.
+                    selectProject(active ? "" : project.id);
+                    setChosen(active ? "" : project.id);
+                  }}
+                >
+                  {active ? "Stop pinning" : "View this project"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
+    </>
+  );
+}
+
+/* Agent --------------------------------------------------------------------- */
+
+/**
+ * Give a task to a worker and watch the whole loop.
+ *
+ * context → routing → worker → change review, each stage the same service the
+ * CLI uses. The panel renders what happened; it decides nothing itself.
+ *
+ * **Edits are off by default.** §34 forbids over-automation, and a run that
+ * rewrites a working tree unasked is precisely that. Turning it on is a
+ * deliberate act, and even then nothing is committed or accepted — the run ends
+ * with a Change Receipt a person still has to agree with.
+ */
+export function Agent(): ReactNode {
+  const { data: runnerData } = useApi(() => api.agentRunners());
+  const runners = runnerData?.runners ?? [];
+
+  const [task, setTask] = useState("");
+  const [applyEdits, setApplyEdits] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [run, setRun] = useState<AgentRun | undefined>();
+  const [failure, setFailure] = useState<string | undefined>();
+
+  const go = async (): Promise<void> => {
+    setRunning(true);
+    setFailure(undefined);
+    setRun(undefined);
+    try {
+      setRun(await api.runAgent({ task, applyEdits }));
+    } catch (problem) {
+      setFailure(describeError(problem));
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const receipt = run?.contextReceipt;
+  const avoided =
+    receipt === undefined
+      ? 0
+      : receipt.candidate_total_tokens - receipt.final_total_tokens;
+
+  return (
+    <>
+      <h1>Agent</h1>
+      <p className="subtitle">
+        Give a task to a worker. ctxd selects the context, chooses who runs it,
+        and inspects what comes back.
+      </p>
+
+      <div className="rows">
+        {runners.map((runner) => (
+          <div className="reason" key={runner.id}>
+            {runner.available ? "▸" : "×"} <strong>{runner.name}</strong> — {runner.detail}
+          </div>
+        ))}
+      </div>
+
+      <div className="toolbar">
+        <input
+          type="text"
+          placeholder="What should it do?"
+          value={task}
+          onChange={(event) => setTask(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && task.trim() !== "") void go();
+          }}
+        />
+        <button className="button" disabled={running || task.trim() === ""} onClick={() => void go()}>
+          {running ? "Running…" : "Run"}
+        </button>
+      </div>
+
+      <label className="reason">
+        <input
+          type="checkbox"
+          checked={applyEdits}
+          onChange={(event) => setApplyEdits(event.target.checked)}
+        />{" "}
+        Let the worker edit files. Off by default — without it the worker reads
+        and reports, and your working tree is untouched.
+      </label>
+
+      {failure !== undefined ? <WriteResult message={failure} tone="refused" /> : null}
+
+      {run !== undefined ? (
+        <>
+          <h2>Routing</h2>
+          <div className="card">
+            <strong>
+              {run.routing.worker} · {run.routing.model}
+            </strong>
+            {run.routing.reasons.map((reason) => (
+              <div className="reason" key={reason}>
+                · {reason}
+              </div>
+            ))}
+          </div>
+
+          <h2>Context sent</h2>
+          <div className="card">
+            <Stat
+              label="estimated context avoided"
+              value={avoided.toLocaleString()}
+            />
+            <div className="reason">
+              {receipt?.candidate_total_tokens.toLocaleString()} candidate →{" "}
+              {receipt?.final_total_tokens.toLocaleString()} sent — every item with a
+              stated reason, in the Context panel
+            </div>
+          </div>
+
+          <h2>What the worker did</h2>
+          <div className="card">
+            <strong className={run.worker.ok ? "ok" : "warning"}>
+              {run.worker.ok ? "completed" : "failed"}
+            </strong>
+            <div className="reason">
+              {(run.worker.durationMs / 1000).toFixed(1)}s
+              {run.worker.turns !== undefined ? ` · ${run.worker.turns} turn(s)` : ""}
+              {/* Labelled as the worker's own figure, and never as a bill:
+                  on a subscription no money changes hands per run (§18). */}
+              {run.worker.reportedCostUsd !== undefined
+                ? ` · worker reports $${run.worker.reportedCostUsd.toFixed(4)} equivalent API cost`
+                : ""}
+            </div>
+            {run.worker.error !== undefined ? (
+              <pre>{run.worker.error}</pre>
+            ) : (
+              <pre>{run.worker.result}</pre>
+            )}
+          </div>
+
+          {run.change !== undefined ? (
+            <>
+              <h2>What changed</h2>
+              <ChangeReceiptView receipt={run.change} />
+            </>
+          ) : applyEdits ? (
+            <p className="disclaimer">
+              No change review: the working tree could not be read as a Git
+              repository.
+            </p>
+          ) : (
+            <p className="disclaimer">
+              Edits were not enabled, so there is nothing of the worker's to
+              review and your working tree was not touched.
+            </p>
+          )}
+        </>
+      ) : null}
+    </>
+  );
+}
+
+/* Verification (§21, §43) --------------------------------------------------- */
+
+/**
+ * Run the project's own checks (`ctxd verify`).
+ *
+ * The one panel that executes anything. What runs is discovered from the
+ * project's manifest — its own typecheck, lint, test and build scripts — and
+ * cannot be supplied by the request, so this is not a shell.
+ *
+ * A check that did not run is never drawn as a pass (§13): its status is shown
+ * verbatim, including `skipped`.
+ */
+export function Verification(): ReactNode {
+  const [result, setResult] = useState<VerificationResult | undefined>();
+  const [running, setRunning] = useState(false);
+  const [failure, setFailure] = useState<string | undefined>();
+
+  const run = async (dryRun: boolean): Promise<void> => {
+    setRunning(true);
+    setFailure(undefined);
+    try {
+      setResult(await api.verify({ dryRun }));
+    } catch (problem) {
+      setFailure(describeError(problem));
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <>
+      <h1>Verification</h1>
+      <p className="subtitle">
+        The project's own checks. ctxd runs what your manifest already defines —
+        it never invents a command.
+      </p>
+
+      <div className="toolbar">
+        <button className="button" disabled={running} onClick={() => void run(false)}>
+          {running ? "Running…" : "Run checks"}
+        </button>
+        <button className="button" disabled={running} onClick={() => void run(true)}>
+          Show what would run
+        </button>
+      </div>
+      <p className="disclaimer">
+        Checks run in this process, so the interface waits while they do — a full
+        test run can take a while.
+      </p>
+      {failure !== undefined ? <WriteResult message={failure} tone="refused" /> : null}
+
+      {result !== undefined ? (
+        <>
+          <div className="card">
+            <strong className={verdictTone(result.status)}>{result.status}</strong>
+            <div className="reason">
+              {formatTime(result.timestamp)} · {result.changedFiles.length} changed file(s)
+            </div>
+          </div>
+
+          {result.reasons.length > 0 ? (
+            <div className="rows">
+              {result.reasons.map((reason) => (
+                <div className="reason" key={reason}>
+                  · {reason}
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="rows">
+            {result.checks.map((check) => (
+              <div className="row" key={`${check.kind}-${check.command}`}>
+                <div className="row-head">
+                  <strong>{check.kind}</strong>
+                  <span className="tag">{check.status}</span>
+                </div>
+                <div className="path">{check.command}</div>
+                <div className="reason">
+                  {check.detail}
+                  {check.durationMs > 0 ? ` · ${check.durationMs}ms` : ""}
+                </div>
+                {check.output !== undefined ? <pre>{check.output}</pre> : null}
+              </div>
+            ))}
+          </div>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 /* Tasks (§67) --------------------------------------------------------------- */
 
 const COLUMNS = ["BACKLOG", "PLANNED", "IN_PROGRESS", "BLOCKED", "REVIEW", "DONE"] as const;
 
 export function TaskBoard(): ReactNode {
-  const { data, error, loading } = useApi(() => api.tasks());
+  const { data, error, loading, refresh } = useApi(() => api.tasks());
   const tasks = data?.tasks ?? [];
+
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | undefined>();
+
+  const create = async (): Promise<void> => {
+    setBusy(true);
+    setFailure(undefined);
+    try {
+      await api.createTask({ title });
+      setTitle("");
+      refresh();
+    } catch (problem) {
+      setFailure(describeError(problem));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Moving a card is a PATCH carrying only `status`; every other field is left
+  // alone rather than round-tripped through the browser, so nothing the
+  // interface never displayed can be overwritten by displaying it.
+  const move = async (id: string, status: string): Promise<void> => {
+    setFailure(undefined);
+    try {
+      await api.updateTask({ id, status });
+      refresh();
+    } catch (problem) {
+      setFailure(describeError(problem));
+    }
+  };
 
   return (
     <>
       <h1>Tasks</h1>
       <p className="subtitle">Units of work ctxd is tracking.</p>
 
+      <div className="toolbar">
+        <input
+          type="text"
+          placeholder="New task…"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && title.trim() !== "") void create();
+          }}
+        />
+        <button className="button" disabled={busy || title.trim() === ""} onClick={() => void create()}>
+          {busy ? "Adding…" : "Add"}
+        </button>
+      </div>
+      {failure !== undefined ? <WriteResult message={failure} tone="refused" /> : null}
+
       <Panel
         loading={loading}
         error={error}
         empty={tasks.length === 0}
-        emptyMessage="No tasks yet. Run: ctxd task add …"
+        emptyMessage="No tasks yet. Add one above, or run: ctxd task add …"
       >
         <div className="kanban">
           {COLUMNS.map((column) => {
@@ -608,6 +1194,17 @@ export function TaskBoard(): ReactNode {
                         P{task.priority}
                         {task.worker != null ? ` · ${task.worker}` : ""}
                       </div>
+                      <select
+                        aria-label={`Status of ${task.title}`}
+                        value={task.status}
+                        onChange={(event) => void move(task.id, event.target.value)}
+                      >
+                        {COLUMNS.map((option) => (
+                          <option key={option} value={option}>
+                            {option.replace("_", " ")}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   ))}
                 </div>
@@ -623,12 +1220,57 @@ export function TaskBoard(): ReactNode {
 /* Resume -------------------------------------------------------------------- */
 
 export function Resume(): ReactNode {
-  const { data, error, loading } = useApi(() => api.resume());
+  const { data, error, loading, refresh } = useApi(() => api.resume());
+
+  const [next, setNext] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ message: string; tone: "ok" | "refused" } | undefined>();
+
+  const run = async (what: "session" | "checkpoint"): Promise<void> => {
+    setBusy(true);
+    setResult(undefined);
+    try {
+      if (what === "session") {
+        await api.startSession({});
+        // Starting twice returns the open session rather than opening a
+        // second, so this is safe to press again and says so.
+        setResult({ message: "Session open.", tone: "ok" });
+      } else {
+        await api.createCheckpoint(next.trim() === "" ? {} : { next });
+        setResult({ message: "Checkpoint recorded.", tone: "ok" });
+        setNext("");
+      }
+      refresh();
+    } catch (problem) {
+      setResult({ message: describeError(problem), tone: "refused" });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <>
       <h1>Resume</h1>
       <p className="subtitle">What was I doing?</p>
+
+      <div className="toolbar">
+        <input
+          type="text"
+          placeholder="Next action — what should the next session do first?"
+          value={next}
+          onChange={(event) => setNext(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") void run("checkpoint");
+          }}
+        />
+        <button className="button" disabled={busy} onClick={() => void run("checkpoint")}>
+          Checkpoint
+        </button>
+        <button className="button" disabled={busy} onClick={() => void run("session")}>
+          Start session
+        </button>
+      </div>
+      {result !== undefined ? <WriteResult message={result.message} tone={result.tone} /> : null}
 
       <Panel loading={loading} error={error}>
         <pre>{data?.resume}</pre>
@@ -679,8 +1321,45 @@ function connectionNote(connection: WorkerConnection): string {
 }
 
 export function WorkerMonitor(): ReactNode {
-  const { data, error, loading } = useApi(() => api.workers());
+  const { data, error, loading, refresh } = useApi(() => api.workers());
   const workers = data?.workers ?? [];
+
+  const [to, setTo] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ message: string; tone: "ok" | "refused" } | undefined>();
+
+  /**
+   * Hand the work to another worker (`ctxd handoff`).
+   *
+   * Naming nobody assembles the handoff without moving anything, so a person
+   * can read what would travel before committing to it.
+   */
+  const hand = async (move: boolean): Promise<void> => {
+    setBusy(true);
+    setResult(undefined);
+    try {
+      const done = await api.handoff(
+        move
+          ? { to, ...(note.trim() === "" ? {} : { note }) }
+          : {},
+      );
+      const warnings = done.warnings ?? [];
+      setResult({
+        message: done.moved
+          ? `Work moved to ${done.toWorker ?? to}.${warnings.length > 0 ? ` ${warnings.join(" ")}` : ""}`
+          : "Handoff assembled. Nothing has moved.",
+        // A warning is not a failure, but it must not read like clean success.
+        tone: warnings.length > 0 ? "refused" : "ok",
+      });
+      if (move) setNote("");
+      refresh();
+    } catch (problem) {
+      setResult({ message: describeError(problem), tone: "refused" });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <>
@@ -688,6 +1367,28 @@ export function WorkerMonitor(): ReactNode {
       <p className="subtitle">
         Who has been working on this project. Workers are replaceable; the memory is not.
       </p>
+
+      <div className="toolbar">
+        <input
+          type="text"
+          placeholder="Hand off to… (claude, cursor, …)"
+          value={to}
+          onChange={(event) => setTo(event.target.value)}
+        />
+        <input
+          type="text"
+          placeholder="Note for whoever picks it up"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+        />
+        <button className="button" disabled={busy || to.trim() === ""} onClick={() => void hand(true)}>
+          Hand off
+        </button>
+        <button className="button" disabled={busy} onClick={() => void hand(false)}>
+          Preview
+        </button>
+      </div>
+      {result !== undefined ? <WriteResult message={result.message} tone={result.tone} /> : null}
 
       <Panel loading={loading} error={error}>
         <div className="rows">
@@ -736,15 +1437,79 @@ export function WorkerMonitor(): ReactNode {
 
 /* Settings (§67) ------------------------------------------------------------ */
 
+/**
+ * Where the developer supplies the local API token.
+ *
+ * The token is not shipped to the page: it is a credential, and a page that
+ * received it automatically would also hand it to anything else able to
+ * `GET /`. It is entered once and kept in `localStorage` — the same trade the
+ * 401 hint describes.
+ */
+function TokenSetting(): ReactNode {
+  const [token, setToken] = useState(storedToken());
+  const [saved, setSaved] = useState(false);
+
+  const held = storedToken() !== "";
+
+  return (
+    <>
+      <h2>API token</h2>
+      <p className="disclaimer">
+        Reading needs no token. Recording a memory, adding or moving a task, and
+        taking a checkpoint do — get it with <code>ctxd ui --print-token</code>.
+        It is kept in this browser only and never sent anywhere but this local
+        API.
+      </p>
+      <div className="toolbar">
+        <input
+          type="password"
+          aria-label="Local API token"
+          placeholder={held ? "A token is stored" : "Paste the local API token"}
+          value={token}
+          onChange={(event) => {
+            setToken(event.target.value);
+            setSaved(false);
+          }}
+        />
+        <button
+          className="button"
+          onClick={() => {
+            storeToken(token);
+            setSaved(true);
+          }}
+        >
+          Save
+        </button>
+        <button
+          className="button"
+          onClick={() => {
+            storeToken("");
+            setToken("");
+            setSaved(false);
+          }}
+        >
+          Forget
+        </button>
+      </div>
+      {saved ? <WriteResult message="Token stored in this browser." tone="ok" /> : null}
+    </>
+  );
+}
+
 export function SettingsView(): ReactNode {
   const { data, error, loading } = useApi(() => api.settings());
 
   return (
     <>
       <h1>Settings</h1>
-      <p className="subtitle">Read-only. The configuration file is the interface.</p>
+      <p className="subtitle">
+        Configuration is read-only — the file is the interface. The API token is
+        stored in this browser.
+      </p>
 
       <Panel loading={loading} error={error}>
+        <TokenSetting />
+
         <h2>Configuration file</h2>
         <div className="card path">{data?.configFile}</div>
         <p className="disclaimer">{data?.note}</p>
