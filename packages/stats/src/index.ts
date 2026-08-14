@@ -314,3 +314,53 @@ export function startOfToday(now: Date = new Date()): string {
   start.setHours(0, 0, 0, 0);
   return start.toISOString();
 }
+
+/**
+ * The named reporting windows (UI-7).
+ *
+ * Defined here rather than in the interface so the CLI and the API cannot
+ * disagree about what "7d" means. A browser that computed its own cutoff would
+ * be a second place the answer could differ from `ctxd stats`, and the two
+ * agreeing is the reason either can be trusted.
+ */
+export type StatsWindow = "today" | "7d" | "30d" | "all";
+
+export const STATS_WINDOWS: readonly StatsWindow[] = ["today", "7d", "30d", "all"];
+
+export function isStatsWindow(value: string): value is StatsWindow {
+  return (STATS_WINDOWS as readonly string[]).includes(value);
+}
+
+/**
+ * The cutoff a window implies, or `undefined` for everything on disk.
+ *
+ * "today" is local midnight, matching `--today`; the rolling windows count back
+ * from now rather than from midnight, because "the last 7 days" is what a
+ * developer checking mid-afternoon means by it.
+ */
+export function windowSince(window: StatsWindow, now: Date = new Date()): string | undefined {
+  switch (window) {
+    case "today":
+      return startOfToday(now);
+    case "7d":
+      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    case "30d":
+      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    default:
+      return undefined;
+  }
+}
+
+/** How a window is worded in a report heading. */
+export function describeWindow(window: StatsWindow): string {
+  switch (window) {
+    case "today":
+      return "today";
+    case "7d":
+      return "last 7 days";
+    case "30d":
+      return "last 30 days";
+    default:
+      return "all time";
+  }
+}
