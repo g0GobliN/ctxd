@@ -1,5 +1,5 @@
 {
-  "name": "ctxd",
+  "name": "ctxd-workspace",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -21,7 +21,7 @@
     "@ctxd/agent": "workspace:*",
     "@ctxd/ai": "workspace:*",
     "@ctxd/api": "workspace:*",
-    "@ctxd/cli": "workspace:*",
+    "ctxd": "workspace:*",
     "@ctxd/context": "workspace:*",
     "@ctxd/core": "workspace:*",
     "@ctxd/db": "workspace:*",

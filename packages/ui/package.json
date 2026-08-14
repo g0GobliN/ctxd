@@ -1,8 +1,28 @@
 {
   "name": "@ctxd/ui",
   "version": "0.1.0",
-  "private": true,
+  "description": "ctxd ui",
+  "license": "MIT",
+  "author": "the ctxd authors",
+  "homepage": "https://github.com/g0GobliN/ctxd#readme",
+  "bugs": {
+    "url": "https://github.com/g0GobliN/ctxd/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/g0GobliN/ctxd.git",
+    "directory": "packages/ui"
+  },
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "vite build",
     "dev": "vite",

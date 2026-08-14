@@ -75,7 +75,20 @@ has a stated reason. Not compression: **selection you can audit**.
 
 ## Install
 
-Requires **Node.js 24+** and **pnpm**.
+Requires **Node.js 24+**.
+
+```bash
+npm install -g ctxd
+ctxd doctor
+```
+
+`doctor` verifies Node, SQLite, FTS5, storage, config, the database, logging,
+Git and offline capability. Every check actually runs — none reports success
+without executing.
+
+### From source
+
+For contributors, or to run an unreleased change. Requires **pnpm** as well.
 
 ```bash
 git clone https://github.com/g0GobliN/ctxd.git
@@ -86,29 +99,23 @@ pnpm build:all      # core packages, then the interface bundle
 node packages/cli/dist/index.js doctor
 ```
 
-### Making `ctxd` available everywhere
+`pnpm build` alone builds the core packages; `build:all` also builds the
+interface. React and Vite are build-time only — nothing remote is ever fetched
+at runtime.
 
-The commands below — and the MCP setup ctxd generates for each project — assume
-`ctxd` is on your PATH. Pick one:
+To put `ctxd` on your PATH from a source checkout:
 
 ```bash
 # a) link it globally (needs "pnpm setup" once, to create the global bin dir)
-pnpm --filter @ctxd/cli link --global
+pnpm --filter ctxd link --global
 
 # b) or add an alias to your shell profile
 alias ctxd="node /absolute/path/to/ctxd/packages/cli/dist/index.js"
 ```
 
-Verify with `ctxd doctor`. If it prints nothing at all, you are running a build
-from before the bin shim was fixed — rebuild with `pnpm build`.
-
-`pnpm build` alone builds the core packages; `build:all` also builds the
-interface. React and Vite are build-time only — nothing remote is ever fetched
-at runtime.
-
-`doctor` verifies Node, SQLite, FTS5, storage, config, the database, logging,
-Git and offline capability. Every check actually runs — none reports success
-without executing.
+On Windows, where `alias` does not exist, put a `ctxd.cmd` containing
+`node "C:/path/to/ctxd/packages/cli/dist/index.js" %*` in a directory already
+on `PATH`.
 
 ## Quickstart
 

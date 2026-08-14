@@ -1131,7 +1131,7 @@ Exit criteria:
 - [x] The desktop window needs no token entry
 - [x] **655 tests passing, 0 failing**
 - [x] `ctxd export`/`import` and `ctxd doctor` remain CLI-only. `runDoctor`
-      lives in `@ctxd/cli` and `@ctxd/api` cannot import from it without
+      lives in `ctxd` (the CLI package) and `@ctxd/api` cannot import from it without
       inverting the dependency; moving it into the core is the prerequisite and
       has not been done
 

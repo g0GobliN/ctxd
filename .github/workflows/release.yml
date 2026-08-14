@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Pack and inspect without publishing"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+
+      - run: pnpm install --frozen-lockfile
+
+      # `build:all`, never `build`. packages/ui/dist is gitignored and built by
+      # Vite, and @ctxd/api resolves the interface at ../../ui/dist — publishing
+      # without this step ships a package whose `ctxd ui` serves nothing.
+      - name: Build core packages and the interface
+        run: pnpm build:all
+
+      - name: Regenerate fixtures
+        run: |
+          node --experimental-strip-types scripts/generate-fixture.ts
+          node --experimental-strip-types scripts/generate-benchmarks.ts
+          node --experimental-strip-types scripts/generate-benchmarks-2.ts
+
+      # A release that skipped the suite would be a release nobody checked.
+      - name: Test
+        run: pnpm test
+
+      - name: Verify the interface bundle exists
+        run: |
+          set -euo pipefail
+          test -f packages/ui/dist/index.html
+          ls packages/ui/dist/assets/*.js >/dev/null
+          echo "interface bundle present"
+
+      # Confirms the tag matches what would actually be published, so a
+      # mistyped tag fails here instead of publishing the wrong version.
+      - name: Check the tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./packages/cli/package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag v$tag does not match ctxd@$pkg"
+            exit 1
+          fi
+          echo "tag v$tag matches ctxd@$pkg"
+
+      - name: Pack every package (dry run)
+        run: pnpm -r --filter "!ctxd-workspace" exec npm pack --dry-run
+
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: pnpm publish -r --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

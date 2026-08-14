@@ -1,8 +1,34 @@
 {
-  "name": "@ctxd/cli",
+  "name": "ctxd",
   "version": "0.1.0",
-  "private": true,
+  "description": "A context firewall for AI coding agents — local-first engineering memory",
+  "keywords": [
+    "ai",
+    "llm",
+    "context",
+    "claude",
+    "cursor",
+    "mcp",
+    "tokens",
+    "agent",
+    "code-review",
+    "local-first"
+  ],
+  "license": "MIT",
+  "author": "the ctxd authors",
+  "homepage": "https://github.com/g0GobliN/ctxd#readme",
+  "bugs": {
+    "url": "https://github.com/g0GobliN/ctxd/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/g0GobliN/ctxd.git",
+    "directory": "packages/cli"
+  },
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "bin": {
     "ctxd": "./dist/index.js"
   },
@@ -11,6 +37,15 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@ctxd/ai": "workspace:*",

@@ -171,7 +171,7 @@ understood, and the machine is why it cannot be carried out.
 ### What still has no write route
 
 `ctxd export`/`import` and `ctxd doctor` remain CLI-only. `doctor` lives in
-`@ctxd/cli`, and `@ctxd/api` cannot import from it without inverting the
+`ctxd` (the CLI package), and `@ctxd/api` cannot import from it without inverting the
 dependency — moving `runDoctor` into the core is the prerequisite, and has not
 been done.
 

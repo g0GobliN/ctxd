@@ -47,7 +47,7 @@ architectural need appears, not for symmetry.
 | `@ctxd/stats` | Aggregates receipts into token statistics and efficiency reports |
 | `@ctxd/api` | Local HTTP API on 127.0.0.1, token-gated writes, serves the interface |
 | `@ctxd/ui` | React interface, built by Vite to static files (build-time deps only) |
-| `@ctxd/cli` | Argument parsing and commands |
+| `ctxd` | Argument parsing and commands — the published CLI package |
 
 Dependency direction is strictly one-way:
 

@@ -65,7 +65,7 @@ which injects it into its own webview, so the token is never served over HTTP.
 See [api.md](api.md), [ui.md](ui.md) and [desktop.md](desktop.md).
 
 `ctxd export`/`import` and `ctxd doctor` are what remain CLI-only. `runDoctor`
-lives in `@ctxd/cli`, and `@ctxd/api` cannot import from it without inverting
+lives in `ctxd` (the CLI package), and `@ctxd/api` cannot import from it without inverting
 the dependency.
 
 ## 2.3 — the agent loop
