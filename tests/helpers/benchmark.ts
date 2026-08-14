@@ -32,16 +32,102 @@ export interface Benchmark {
   readonly dir: string;
 }
 
-/** Load every benchmark scenario found under `tests/fixtures/benchmarks`. */
-export function loadBenchmarks(): Benchmark[] {
-  const entries = readdirSync(BENCHMARK_ROOT, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .sort((a, b) => (a.name < b.name ? -1 : 1));
+/**
+ * What a scenario measures.
+ *
+ * `context` scenarios measure the input firewall: what reached the model.
+ * `change` scenarios measure the output firewall: what the worker did with it.
+ * Both live under the same directory because both are benchmarks — retrieval
+ * quality and edit discipline are the two things ctxd claims to improve, and
+ * measuring only one of them would leave half the claim unevidenced (UI-12).
+ */
+export type BenchmarkKind = "context" | "change";
 
-  return entries.map((entry) => {
-    const dir = join(BENCHMARK_ROOT, entry.name);
-    const definition = JSON.parse(readFileSync(join(dir, "benchmark.json"), "utf8")) as
-      Omit<Benchmark, "dir">;
-    return { ...definition, dir: join(dir, "project") };
-  });
+interface BenchmarkFile {
+  readonly kind?: BenchmarkKind;
+}
+
+function readDefinition(name: string): { dir: string; raw: Record<string, unknown> } {
+  const dir = join(BENCHMARK_ROOT, name);
+  return {
+    dir,
+    raw: JSON.parse(readFileSync(join(dir, "benchmark.json"), "utf8")) as Record<string, unknown>,
+  };
+}
+
+function scenarioNames(): string[] {
+  return readdirSync(BENCHMARK_ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+}
+
+/**
+ * Load every context benchmark under `tests/fixtures/benchmarks`.
+ *
+ * Scenarios are discovered rather than listed, so adding a directory is all it
+ * takes. Kind defaults to `context` because that is what every scenario was
+ * before change benchmarks existed — an absent field must not silently
+ * reclassify a scenario that has been running all along.
+ */
+export function loadBenchmarks(): Benchmark[] {
+  return scenarioNames()
+    .map((name) => readDefinition(name))
+    .filter(({ raw }) => ((raw as BenchmarkFile).kind ?? "context") === "context")
+    .map(({ dir, raw }) => ({
+      ...(raw as unknown as Omit<Benchmark, "dir">),
+      dir: join(dir, "project"),
+    }));
+}
+
+/** What a change scenario asserts about the Diff Firewall's verdict. */
+export interface ChangeExpectation {
+  readonly classification?: string;
+  /** low | medium | high — how much attention the verdict demands. */
+  readonly risk?: string;
+  readonly minEfficiency?: number;
+  readonly maxEfficiency?: number;
+  readonly smallTaskMismatch?: boolean;
+  readonly filesChanged?: number;
+  readonly minUnrelatedFiles?: number;
+  readonly requiredSignals?: readonly string[];
+  readonly forbiddenSignals?: readonly string[];
+  /**
+   * The firewall must still produce a receipt and a recommendation rather than
+   * refusing the work. A large diff is not the same as a wrong one (§50).
+   */
+  readonly mustNotAutoReject?: boolean;
+  /** Why this scenario exists, carried into the failure message. */
+  readonly note?: string;
+}
+
+export interface ChangeBenchmark {
+  readonly name: string;
+  readonly task: string;
+  readonly expect: ChangeExpectation;
+  /** The unified diff under test, read from the scenario directory. */
+  readonly diff: string;
+}
+
+/**
+ * Load every change benchmark.
+ *
+ * The diff is a checked-in file rather than a repository built at test time:
+ * the Diff Firewall is a pure function over a parsed diff, so a fixture diff
+ * measures exactly what a real one would, without a Git dependency in the
+ * measurement.
+ */
+export function loadChangeBenchmarks(): ChangeBenchmark[] {
+  return scenarioNames()
+    .map((name) => readDefinition(name))
+    .filter(({ raw }) => (raw as BenchmarkFile).kind === "change")
+    .map(({ dir, raw }) => {
+      const definition = raw as unknown as Omit<ChangeBenchmark, "diff"> & { diff: string };
+      return {
+        name: definition.name,
+        task: definition.task,
+        expect: definition.expect,
+        diff: readFileSync(join(dir, definition.diff), "utf8"),
+      };
+    });
 }

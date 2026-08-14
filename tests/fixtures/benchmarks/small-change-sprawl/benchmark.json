@@ -1,0 +1,21 @@
+{
+  "kind": "change",
+  "name": "small-change-sprawl",
+  "task": "Fix the off-by-one in the retry limit check",
+  "diff": "change.diff",
+  "expect": {
+    "classification": "NEEDS_REVIEW",
+    "risk": "high",
+    "maxEfficiency": 0.65,
+    "smallTaskMismatch": true,
+    "minUnrelatedFiles": 2,
+    "requiredSignals": [
+      "small-task-large-change",
+      "unrelated-files",
+      "dependency-changes"
+    ],
+    "forbiddenSignals": [],
+    "mustNotAutoReject": true,
+    "note": "The same one-line fix, delivered as a whole-file reformat, unrelated files and a new dependency. §55 says a small task with a large change must be flagged and must require review, so NEEDS_REVIEW is the verdict, not SUSPICIOUS. src/http/client.ts is deliberately NOT expected to count as unrelated: it imports retry.ts and matches the task's terms, and calling it unrelated would be the kind of false alarm that teaches a developer to ignore the warnings."
+  }
+}

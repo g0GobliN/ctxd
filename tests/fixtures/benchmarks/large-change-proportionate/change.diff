@@ -1,0 +1,133 @@
+diff --git a/src/payment/charge.ts b/src/payment/charge.ts
+index a1b2c3d..d4e5f6a 100644
+--- a/src/payment/charge.ts
++++ b/src/payment/charge.ts
+@@ -1,24 +1,28 @@
+-import Stripe from "stripe";
++import { StripeClient } from "../stripe/client.js";
+ import type { ChargeRequest, ChargeResult } from "./types.js";
+
+-const stripe = new Stripe(process.env.STRIPE_KEY ?? "");
++const client = new StripeClient();
+
+ export async function createCharge(request: ChargeRequest): Promise<ChargeResult> {
+-  const intent = await stripe.paymentIntents.create({
+-    amount: request.amountCents,
+-    currency: request.currency,
+-    customer: request.customerId,
+-  });
++  const intent = await client.createPaymentIntent({
++    amountCents: request.amountCents,
++    currency: request.currency,
++    customerId: request.customerId,
++    idempotencyKey: request.idempotencyKey,
++  });
+
+-  if (intent.status === "requires_payment_method") {
+-    return { ok: false, reason: "no payment method" };
++  if (intent.status === "requires_payment_method") {
++    return { ok: false, reason: "no payment method", intentId: intent.id };
+   }
+
+-  return { ok: true, intentId: intent.id };
++  return { ok: true, intentId: intent.id, status: intent.status };
+ }
++
++export async function capture(intentId: string): Promise<ChargeResult> {
++  const captured = await client.capturePaymentIntent(intentId);
++  return { ok: captured.status === "succeeded", intentId, status: captured.status };
++}
+diff --git a/src/payment/refund.ts b/src/payment/refund.ts
+index b2c3d4e..e5f6a7b 100644
+--- a/src/payment/refund.ts
++++ b/src/payment/refund.ts
+@@ -1,18 +1,21 @@
+-import Stripe from "stripe";
++import { StripeClient } from "../stripe/client.js";
+ import type { RefundRequest, RefundResult } from "./types.js";
+
+-const stripe = new Stripe(process.env.STRIPE_KEY ?? "");
++const client = new StripeClient();
+
+ export async function refundCharge(request: RefundRequest): Promise<RefundResult> {
+-  const refund = await stripe.refunds.create({
+-    payment_intent: request.intentId,
+-    amount: request.amountCents,
+-  });
++  const refund = await client.createRefund({
++    intentId: request.intentId,
++    amountCents: request.amountCents,
++    idempotencyKey: request.idempotencyKey,
++  });
+
+-  return { ok: refund.status === "succeeded", refundId: refund.id };
++  if (refund.status === "pending") {
++    return { ok: false, refundId: refund.id, pending: true };
++  }
++
++  return { ok: refund.status === "succeeded", refundId: refund.id, pending: false };
+ }
+diff --git a/src/payment/webhook.ts b/src/payment/webhook.ts
+index c3d4e5f..f6a7b8c 100644
+--- a/src/payment/webhook.ts
++++ b/src/payment/webhook.ts
+@@ -1,26 +1,31 @@
+-import Stripe from "stripe";
++import { StripeClient } from "../stripe/client.js";
+ import { recordPayment } from "./payment-repository.js";
+
+-const stripe = new Stripe(process.env.STRIPE_KEY ?? "");
++const client = new StripeClient();
+
+ export async function handleWebhook(body: string, signature: string): Promise<void> {
+-  const event = stripe.webhooks.constructEvent(body, signature, process.env.WEBHOOK_SECRET ?? "");
++  // The new client verifies and parses in one step, so a body that fails
++  // verification never reaches the switch below.
++  const event = await client.verifyWebhook(body, signature);
+
+   switch (event.type) {
+     case "payment_intent.succeeded":
+-      await recordPayment(event.data.object.id, "succeeded");
++      await recordPayment(event.data.object.id, "succeeded", event.id);
+       break;
+     case "payment_intent.payment_failed":
+-      await recordPayment(event.data.object.id, "failed");
++      await recordPayment(event.data.object.id, "failed", event.id);
++      break;
++    case "charge.refunded":
++      await recordPayment(event.data.object.id, "refunded", event.id);
+       break;
+     default:
+       break;
+   }
+ }
+diff --git a/src/payment/types.ts b/src/payment/types.ts
+index d4e5f6a..a7b8c9d 100644
+--- a/src/payment/types.ts
++++ b/src/payment/types.ts
+@@ -1,16 +1,20 @@
+ export interface ChargeRequest {
+   readonly amountCents: number;
+   readonly currency: string;
+   readonly customerId: string;
++  readonly idempotencyKey: string;
+ }
+
+ export interface ChargeResult {
+   readonly ok: boolean;
+   readonly intentId?: string;
+   readonly reason?: string;
++  readonly status?: string;
+ }
+
+ export interface RefundRequest {
+   readonly intentId: string;
+   readonly amountCents: number;
++  readonly idempotencyKey: string;
+ }
+
+ export interface RefundResult {
+   readonly ok: boolean;
+   readonly refundId: string;
++  readonly pending: boolean;
+ }

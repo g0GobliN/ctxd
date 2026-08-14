@@ -1,0 +1,20 @@
+{
+  "kind": "change",
+  "name": "small-change-focused",
+  "task": "Fix the off-by-one in the retry limit check",
+  "diff": "change.diff",
+  "expect": {
+    "classification": "FOCUSED",
+    "minEfficiency": 0.85,
+    "smallTaskMismatch": false,
+    "filesChanged": 1,
+    "requiredSignals": [],
+    "forbiddenSignals": [
+      "small-task-large-change",
+      "unrelated-files",
+      "dependency-changes",
+      "whole-file-rewrite"
+    ],
+    "note": "A small task with a small diff is the case the firewall must stay quiet about. A tool that warns on everything gets ignored, and then it protects nothing."
+  }
+}

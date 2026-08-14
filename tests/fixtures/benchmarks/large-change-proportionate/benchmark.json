@@ -1,0 +1,16 @@
+{
+  "kind": "change",
+  "name": "large-change-proportionate",
+  "task": "Migrate the payment module to the new Stripe client across the charge, refund and webhook paths",
+  "diff": "change.diff",
+  "expect": {
+    "smallTaskMismatch": false,
+    "requiredSignals": [],
+    "forbiddenSignals": [
+      "small-task-large-change",
+      "unrelated-files"
+    ],
+    "mustNotAutoReject": true,
+    "note": "The opposite failure to small-change-sprawl, and the one §50 names explicitly: a large diff must never be treated as proof of a wrong one. This migration is genuinely large, genuinely relevant, and must not be flagged as a mismatch or have its files called unrelated. A firewall that punishes necessary work gets switched off."
+  }
+}
