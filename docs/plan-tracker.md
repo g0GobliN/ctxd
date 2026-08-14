@@ -5,9 +5,12 @@ sections 0–91). Section refs like `§22` point back at the spec.
 
 **Spec read: complete (all 92 sections).**
 
-**Current state:** Phases 1 through 10 complete and verified (Tauri excepted —
-it is explicitly "eventually" in §67). 431 tests passing,
-seven golden benchmarks green. All 15 MCP tools are live, and MCP has no
+**Current state:** 1.0 complete and verified — phases 1 through 10 (Tauri
+excepted, explicitly "eventually" in §67). 2.0 is under way: UI-0 through UI-9, UI-11
+and UI-12 are done. UI-10 (Tauri) is written but has never compiled on this
+machine — see its entry; it is the one thing not verified. Its phases are
+tracked at the end of this file. **617 tests passing, 0 failing**, seven context
+benchmarks and three change benchmarks green. All 15 MCP tools are live, and MCP has no
 execution primitive at all — asserted by a test and a CI gate. ctxd ships no
 model and calls no network; the AI interfaces exist so one could be added.
 
@@ -64,7 +67,7 @@ without losing correctness · 3) reduce unnecessary AI code changes.
 | 7 | Worker management + verification + Diff Firewall | ✅ done |
 | 8 | React UI + local API | ✅ done |
 | 9 | Optimization + benchmarks | ✅ done |
-| 10 | Optional local AI / embeddings / Tauri | ✅ interfaces done · Tauri not started |
+| 10 | Optional local AI / embeddings / Tauri | ✅ interfaces done · Tauri written, never compiled |
 
 ---
 
@@ -445,3 +448,463 @@ Build the smallest correct system first — but do **not** pick a weak algorithm
 just because it's easy. Where an algorithm is core, design the interface and
 scoring model so it can improve without an architecture rewrite. The Context
 Firewall and Diff Firewall are ctxd's core IP.
+
+---
+
+# ctxd 2.0 — the graph control centre
+
+Derived from `docs/plan.md` v2.0. Section refs like `§7.2` point back at that
+spec. 2.0 connects what 1.0 built; it does not rebuild it — the audit matrix in
+§3 of the spec records what already exists and where.
+
+The rule that shapes every phase below is §37: **if the data does not exist,
+show UNKNOWN.** A plausible-looking number with no source is the one failure
+this project cannot afford, because the whole claim of ctxd is that its numbers
+mean something.
+
+## UI-0 — Audit + documentation correction
+
+- [x] Audit performed; implementation matrix recorded in spec §3 with file
+      paths, so the next phase does not re-derive it
+- [x] `docs/api.md`: removed the claim that the React interface "is not yet
+      built" — it has been since Phase 8 — and added `/api/workers` and
+      `/api/config`, two live routes the table omitted
+- [x] `docs/api.md`: named the two real gaps (no event transport, no
+      `/api/stats`) in place of the stale status note
+- [x] `docs/roadmap.md`: 450 tests and seven benchmarks, not 379 and three;
+      2.0 phase table added
+- [x] `docs/roadmap.md`: "Not built" no longer lists four benchmark scenarios
+      that exist — `loadBenchmarks()` reads the fixture directory, so all seven
+      have been running all along
+- [x] This tracker extended with the UI phases
+- [x] Full suite run before any change: **450 pass, 0 fail**, seven benchmarks
+      green
+
+## UI-1 — Event transport
+
+- [x] Migration 5 adds the `events` table (§7.2). `session_events` could not
+      carry these: its `session_id` is `NOT NULL`, and `worker_connected`
+      happens before a session exists
+- [x] `@ctxd/events` — emit and read, depending on `@ctxd/db` alone so every
+      process can call it
+- [x] Producer: MCP. `worker_connected` / `worker_disconnected` from the
+      transport, `context_requested` / `context_built` from the context tool
+- [x] Producer: API. `context_built` from `POST /api/context`
+- [x] Producer: CLI. `ctxd verify` brackets a run with
+      `verification_started` / `_finished`; `ctxd diff` records
+      `change_analyzed` with the verdict. A `--dry-run` records nothing,
+      because it verifies nothing. Emission opens its own short-lived
+      connection *after* the work, so CLI startup is untouched — the
+      lazy-dispatch performance test still passes
+- [x] `GET /api/events` — SSE tailing the table, `Last-Event-ID` as cursor
+- [x] `GET /api/events/recent` — history for the initial load, so a new
+      subscriber never replays the whole log
+- [x] One subscription in the React UI (`subscribeToEvents`), feeding a new
+      Activity panel
+- [x] `ctxd mcp --worker <name>` — identity as configuration, since the server
+      cannot verify it
+
+Exit criteria:
+
+- [x] An event emitted by a **separate process** appears in a client attached
+      to the **API process** — covered by a test that spawns a real second
+      process, and confirmed by hand against a running `ctxd ui`
+- [x] Reconnect with `Last-Event-ID` replays only what was missed
+- [x] `ctxd ui` still exits cleanly with a subscriber attached
+- [x] Events survive a UI restart — the table is the durable copy
+- [x] A slow client cannot grow API memory without bound: 1 MB buffered, then
+      disconnected, losing nothing it cannot replay
+- [x] No fake event data. Payloads carry identifiers and counts only, never
+      context, memory bodies or diff text — asserted by a test
+- [x] Suite green: **482 pass, 0 fail** (450 before this phase); 488 once the
+      CLI producers landed
+
+## UI-2 — Real worker state + receipt provenance
+
+- [x] `workerConnections()` derives connected / working / error / disconnected
+      / unknown from transport events alone
+- [x] MCP emits `worker_request_started` / `_finished` / `_error` around every
+      tool call, so `working` is a state that actually occurs
+- [x] Identity rendered as a **claim** everywhere — `claimedWorker` on the
+      stream, `claims cursor` in the interface, `claimed: true` on the API —
+      exactly as memory provenance separates `worker_statement` from
+      `verified_git`
+- [x] `openEnded` marks a connection observed opening but never closing: a
+      killed process cannot write its own disconnect, so rather than invent a
+      timeout, ctxd reports the fact and its age and lets the developer judge
+- [x] Optional `claimed_worker` on `ContextReceipt` (§16.1), threaded through
+      `buildContext` → `buildProjectContext` → the MCP tool and
+      `POST /api/context`
+- [x] Receipts written before the field existed read `unknown`
+- [x] `pruneEvents()` with a 30-day default, run once at MCP start — the log
+      gains rows per tool call and must not grow without limit
+
+Exit criteria:
+
+- [x] State changes from real events; UNKNOWN stays UNKNOWN without evidence —
+      including the case of activity with no transport event, which is unknown
+      rather than disconnected
+- [x] The interface never presents a claimed identity as verified
+- [x] `GET /api/workers` keeps its contract: `state` still means what the
+      session history says, and `connection` is added alongside it
+- [x] A receipt written by Claude is distinguishable from one by Cursor
+- [x] Suite green: **498 pass, 0 fail** (482 before this phase)
+
+## UI-3 — Graph home screen
+
+- [x] `GET /api/graph` assembles the nodes server-side, so the interface lays
+      out a decision instead of making one in a browser
+- [x] Central ctxd node with workers above and Memory, Repository and
+      Verification below — all connected through the core, never to each
+      other, because that is the actual architecture
+- [x] Hand-written SVG, no graph framework (§5). Under ten nodes at fixed
+      positions: there is no simulation to run and nothing to justify the
+      largest dependency in the repository
+- [x] `countMemories()` — counted in SQLite, because a count taken from a
+      capped listing reports the cap and stops being true once a project
+      outgrows it
+- [x] Receipt reading extracted to `receipts.ts`, shared by the routes and the
+      graph rather than duplicated
+- [x] The graph is the home screen and the first nav item (§30); every existing
+      panel stays reachable
+
+Exit criteria:
+
+- [x] Graph renders from backend data — verified against this repository, where
+      it reports 422,903 → 7,992 estimated tokens from the newest receipt
+- [x] Nodes with no evidence report it: no receipt means `null` token counts
+      and `unknown` accuracy, never `0`, which would claim nothing was avoided
+- [x] Existing panels stay reachable
+- [x] Connection state never rides on colour alone — an unestablished edge is
+      dashed and every state is also a word
+- [x] Suite green: **512 pass, 0 fail** (504 before this phase)
+
+## UI-4 — Live graph
+
+- [x] Graph subscribes to SSE; context requests, retrieval, worker activity,
+      verification and memory updates animate
+- [x] The event → element mapping lives in `packages/ui/src/live.ts`, apart from
+      the drawing code, so it can be tested against events a real producer
+      wrote rather than against a fixture invented for the test
+- [x] Every path lights the core, because every path goes through it. A
+      `change_analyzed` lights the repository and not verification: `ctxd diff`
+      inspects the tree and runs no checks, so drawing the verification edge
+      would claim a check that never happened
+- [x] An event that names no worker lights no worker (§37) — attributing it to
+      whichever worker is on screen would invent what the producer declined to say
+- [x] Pulses decay and the decay timer stops when nothing is lit, so an idle
+      graph is genuinely idle rather than re-rendering in the background
+- [x] `useApi` gained `refresh` alongside `reload`: an event-driven refetch must
+      not blank the panel, because a graph that cleared on every tool call would
+      be unreadable exactly when there was most to read
+- [x] Movement is never the only carrier — a live node also reads "active now"
+      in its accessible label, and `prefers-reduced-motion` drops the animation
+      without dropping the information
+
+Exit criteria:
+
+- [x] A real worker event visibly changes the graph — verified against a running
+      API with an event emitted from a **separate process**: the frame arrived on
+      the stream and `/api/graph` moved from zero workers to one connected
+- [x] The graph is still when the system is still: no animation on a timer
+
+## UI-5 — Activity stream
+
+- [x] Wording, tone and detail extracted to `packages/ui/src/activity-format.ts`,
+      which is plain TypeScript and therefore testable — the panel keeps only
+      the rendering
+- [x] `verification_finished` reports failed and unavailable separately: a check
+      that could not run is not a check that passed (§58)
+- [x] An event carrying no payload gets no detail line, rather than a generic
+      sentence that would read the same whether or not ctxd knew anything
+
+Exit criteria:
+
+- [x] Every displayed line corresponds to a real stored event — asserted in both
+      directions: every `EVENT_TYPES` member has wording, and no wording exists
+      for a type nothing emits (a label whose producer was deleted is exactly
+      how a line with no event behind it would appear)
+- [x] An unrecognised type renders as its raw name rather than being dropped —
+      the event happened, and hiding it would make the stream quietly incomplete
+- [x] History and stream overlap is deduplicated by id, so one event never
+      reads as two things having happened
+
+## UI-6 — Change Firewall in the interface
+
+- [x] Surface the existing over-edit, scope, comment and noise analysis and
+      Change Receipts — `@ctxd/diff` already computed all of it; the interface
+      was showing perhaps a third of it
+- [x] **Expected scope** panel (§51, §55): the inferred task size and the
+      expected file and line counts shown *beside* the actual. Without the
+      expectation on screen a mismatch warning is an opinion a developer can
+      only accept or ignore; with it they can see ctxd expected a one-file
+      change, decide the task read smaller than it was, and move on
+- [x] **Noise** breakdown (§53): formatting-only, comment-only, import-only,
+      whole-file rewrites, renames, generated files, dependency changes and
+      unrelated files — each shown only when non-zero, with the unrelated files
+      named rather than counted
+- [x] **Comments flagged** (§54), worded so the right response is clear: ctxd
+      deletes neither kind, and durable reasoning belongs in project memory
+      where the next session will find it, not in a comment the next worker
+      will "clean up"
+- [x] The saved-receipt listing carries its warnings inline, with evidence — a
+      listing showing only a verdict would make a developer open every row to
+      find the one that mattered
+- [x] The UI's `ChangeReceipt` type was missing 13 of the receipt's fields, so
+      the data had been arriving and being discarded
+- [x] "ctxd reports and never reverts" stated in the panel, next to the analysis
+      that might otherwise read as a to-do list
+
+Exit criteria:
+
+- [x] A small-change scenario produces a real warning — asserted over the real
+      `/api/diff` route against a real Git repository with a real diff, not a
+      fixture payload
+- [x] Every warning carries evidence, not just a summary
+- [x] At least one warning is tied to the **task**, which is what makes it
+      small-fix protection rather than a generic complaint about size
+- [x] The same diff, honestly described, produces no mismatch warning — a tool
+      that warns on everything is ignored, and then it protects nothing
+- [x] `verification_status` reads `UNKNOWN`: `ctxd diff` runs no checks, and
+      anything else would claim one that never happened
+
+## UI-7 — Token monitor
+
+- [x] `GET /api/stats` over `@ctxd/stats` — the same module `ctxd stats` calls,
+      so the panel and the command cannot report different totals for the same
+      receipts
+- [x] TODAY / 7D / 30D / all time, with the windows defined in `@ctxd/stats`
+      rather than in the browser, so there is one definition of "7d"
+- [x] The response echoes `window`, `scope` and the resolved `since`, so a
+      figure is always labelled with what it covers
+- [x] Receipts that could not be read are named in the panel: an incomplete
+      total that says so is not the same as a wrong one
+- [x] Mean efficiency reads `unknown` with no reviews — `0.00` would claim every
+      change was unfocused (§37)
+
+Exit criteria:
+
+- [x] No client-side recomputation of a backend verdict — the browser-side sum
+      at `packages/ui/src/panels.tsx:22` is gone. It was worse than duplication:
+      the receipt listing is capped at 50, so the dashboard total quietly stopped
+      being a total once a project outgrew the cap
+- [x] A test asserts the route and `collectStats` agree exactly
+- [x] An undefined window is rejected, not guessed
+
+## UI-8 — Verification freshness
+
+- [x] Status and age from `ChangeReceipt.verification_status` + `timestamp`;
+      there is no verification-runs table and 2.0 does not add one (§21)
+- [x] `verificationFreshness()` in `@ctxd/diff` — staleness is judged against
+      the **tree**, not against a clock. A timeout would be a guess dressed as a
+      fact; "a file changed after the check ran" is something ctxd observes.
+      Same discipline as `openEnded` on worker connections
+- [x] Work committed after the check counts as change, so a clean tree does not
+      launder a stale verdict into a current one
+- [x] Anything that cannot be established reads `unknown`, never `current` — an
+      unnecessary `unknown` costs a re-run, a false `current` costs correctness
+- [x] The reason names the file or the commit, so the verdict can be argued with
+      rather than merely believed
+
+Exit criteria:
+
+- [x] A stale PASS is never shown as current — the badge reads `PASS — stale`
+      in warning tone, never a bare `PASS`
+- [x] Freshness qualifies a verdict and never replaces it: a stale FAIL is still
+      the last thing ctxd actually observed
+- [x] Verified against a real Git repository with real writes and commits
+
+## UI-9 — Graph interaction
+
+- [x] Pan, zoom, drag, collapse, selection, detail panel
+- [x] Geometry and viewport arithmetic extracted to
+      `packages/ui/src/graph-layout.ts` as pure functions. "Usable with 10+
+      nodes" sounds like something only a human can judge, but the part that
+      decides it is arithmetic — and eyeballing a layout at two workers is
+      exactly how a layout that breaks at twelve gets shipped
+- [x] Worker rows **wrap** rather than compressing spacing. The old code divided
+      the width by the worker count, so at ten workers the boxes overlapped; a
+      cramped-but-legible grid beats an even spread of unreadable boxes
+- [x] The canvas grows when rows wrap, so worker rows never run into the core.
+      A taller picture can be panned; overlapping boxes cannot be fixed by
+      anything
+- [x] Pointer events, not mouse events — trackpad, stylus and touch from one
+      path — with pointer capture so a fast drag is not lost when the pointer
+      leaves the SVG, and `touch-action: none` so a touch drag pans rather than
+      scrolling the page
+- [x] Wheel zoom is anchored: the point under the cursor stays under the cursor,
+      which is the difference between zooming and the diagram sliding away
+- [x] Node drag divides the screen delta by the scale, or a dragged node drifts
+      from the cursor when zoomed
+- [x] Zoom bounded in both directions — neither extreme is recoverable by the
+      gesture that caused it
+- [x] Dragged positions and the viewport are view state, never sent anywhere:
+      where a developer parked a node is not something ctxd knows about the
+      project
+- [x] Collapse past six workers, as a **default** and not a ceiling. Collapsing
+      hides boxes, never facts — the cluster node states the count and the
+      attached total, and the detail panel still lists every worker by name and
+      state, still marked as claims (§6)
+- [x] Zoom in / out / reset controls, and the current scale shown as a number
+
+Exit criteria:
+
+- [x] Usable with 10+ nodes — asserted for 1, 2, 3, 5, 6, 8, 10, 12, 16 and 24
+      workers: no two boxes overlap, and none runs off the canvas
+- [x] The anchored-zoom property holds at the zoom limits as well as in the
+      middle of the range
+- [x] A zoom that would change nothing returns the same viewport, so a wheel
+      spin at the limit does not re-render on every notch
+
+## UI-10 — Desktop shell — **partially done, blocked on this machine**
+
+- [x] `packages/desktop/` — Tauri 2 crate wrapping the same React interface.
+      Not a rewrite and not a foundation: no ctxd logic lives in it
+- [x] The window loads the interface **over HTTP from the local API** rather
+      than bundling the assets. A bundled copy would be a second build of the
+      front end that can drift from the API it talks to, and a stale interface
+      disagreeing with a current backend is exactly what `Cache-Control:
+      no-cache` exists to prevent on the web path
+- [x] The shell refuses any URL that is not loopback. §62 binds ctxd to
+      loopback; the shell is a browser, so without this the desktop build would
+      be the one way to point ctxd's interface at a remote origin — a hole the
+      HTTP server itself does not have
+- [x] `ctxd desktop [--dir] [--port] [--no-window]`. The API is started by the
+      Node process, not by the shell: having the window own the server would be
+      a second way to start ctxd, with its own lifetime and its own bugs. One
+      server, and closing the window stops it
+- [x] The API binds port 0 by default and the shell is told where it actually
+      landed, so nothing is reserved in advance or guessed at
+- [x] A missing shell is reported as a **missing build**, with the `cargo build`
+      command that fixes it — never as a broken feature (§13)
+
+### Not verified — the Rust has never been compiled *or* type-checked
+
+Both `cargo build` and `cargo check` fail on this machine, at the same place:
+
+```
+error: error calling dlltool 'dlltool.exe': program not found
+error: could not compile `parking_lot_core` (lib) due to 1 previous error
+```
+
+The default toolchain is `stable-x86_64-pc-windows-gnu` and MinGW binutils are
+not installed, so there is no `dlltool` for the import libraries a dependency
+needs. `stable-x86_64-pc-windows-msvc` is installed as a toolchain, but neither
+Visual Studio nor the Windows SDK is present, so it has no linker either.
+`cargo check` does not get past this: the failure is in codegen for a
+dependency, not in linking the final binary, so skipping the link does not skip
+it. Building the shell needs a system-level toolchain install — MinGW binutils
+or the MSVC build tools — which is not this project's change to make.
+
+**So UI-10 is not done, and must not be recorded as done.** Nothing in
+`packages/desktop/` has been compiled. The Rust source has never been
+type-checked, `is_loopback` has never had its unit tests executed, no binary has
+been produced, and no window has ever opened. Treat that source as *written but
+entirely unverified* — the first person with a toolchain should expect to fix
+compile errors in it. Ground rule §0/§13: never claim a feature works without
+running it.
+
+The TypeScript half is a different matter and is verified: `ctxd desktop` is
+built by `pnpm build`, type-checks, and its behaviour is covered by
+`tests/e2e/desktop.test.ts`.
+
+Exit criteria:
+
+- [ ] `ctxd` opens a local window — **unverified.** Needs MinGW binutils (for
+      the gnu toolchain) or the MSVC build tools, then
+      `cargo build --release --manifest-path packages/desktop/Cargo.toml`
+- [x] The CLI keeps working independently — **verified**, and it is the half
+      that matters more: the shell is packaging, so nothing about ctxd may
+      depend on it existing. `tests/e2e/desktop.test.ts` asserts `ctxd status`
+      and `ctxd doctor` neither fail nor mention the shell when no binary is
+      present, and that `ctxd desktop --no-window` serves the same loopback API
+      with `/api/health` answering
+- [x] The test suite does not require a Rust toolchain. A suite that only ran
+      where Rust was installed would make the shell a foundation, which is what
+      §67 says it must never be
+
+## UI-11 — Cross-worker handoff
+
+- [x] Claude ↔ Cursor over the existing checkpoint infrastructure
+- [x] `buildHandoff` already assembled everything an incoming worker needs to
+      **read**. What it did not do was *move* anything: it produced a summary,
+      and a summary a developer copies between two chat windows is not a task
+      changing hands. If the outgoing session died before the paste, the work
+      stayed where it was and nobody knew
+- [x] `transferTask()` in `@ctxd/work` makes the move durable, on the checkpoint
+      infrastructure that already exists rather than a mechanism invented for
+      it: a checkpoint records the state at the moment of handover, the task is
+      reassigned, and the handoff text is built from that checkpoint — so what
+      the incoming worker reads and what ctxd recorded are the same thing
+- [x] Records **before** it reassigns, so a failure between the two leaves a
+      checkpoint describing real state rather than a task assigned to a worker
+      with nothing to read
+- [x] `ctxd handoff --to <worker> --accept [--from <worker>] [--summary <note>]`.
+      Without `--accept` the command still only reads and changes nothing
+- [x] `ctx_handoff` gained `accept` and `summary`, with the outgoing side taken
+      from `ctxd mcp --worker` — a worker cannot establish its own identity (§6)
+- [x] New `handoff_created` event type, wired through `EVENT_TYPES`, the activity
+      stream's wording and the graph's element mapping. The incoming worker is
+      deliberately **not** lit on the graph: it has been assigned the work, which
+      is not the same as having been observed doing anything (§37)
+- [x] The event payload carries names, ids and a warning **count** — never the
+      handoff text, which belongs behind `/api/session` rather than on a read
+      route every local process can see
+- [x] Identity discipline throughout: `from` is self-declared, `to` is an
+      assignment, and `formatTransfer` states in the handoff text itself that
+      ctxd cannot verify either. That text is what an incoming worker reads, and
+      an unqualified "from claude" is how a self-declared name quietly becomes
+      an assumed fact
+
+Exit criteria:
+
+- [x] A task moves between workers without losing context — asserted in both
+      halves, because either alone is easy to fake: the assignment actually
+      changes in the database, **and** the binding constraint and accepted
+      decision travel with the work
+- [x] A round trip (claude → cursor → claude) loses nothing recorded before the
+      first handoff
+- [x] Unnamed sender, no task, and a handoff to the worker already holding the
+      work each produce a stated warning rather than a silent no-op — a transfer
+      that silently moved nothing is the worst outcome available, because the
+      outgoing worker believes the work was handed on and it was not
+- [x] The outgoing worker is taken from the session when it is recorded there,
+      since that is a fact rather than a guess
+
+## UI-12 — Benchmarks
+
+- [x] Small-change scenarios added to the existing harness under
+      `tests/fixtures/benchmarks` — the output firewall measured the way the
+      input firewall already is
+- [x] `benchmark.json` gained a `kind` discriminator; `loadBenchmarks()` filters
+      on it and `loadChangeBenchmarks()` is its counterpart. Kind defaults to
+      `context`, so the seven existing scenarios keep working without being
+      touched — an absent field must not silently reclassify a scenario that has
+      been running since Phase 1.5
+- [x] Scenarios are still discovered from the directory, so adding one is adding
+      a folder
+- [x] The diff is a checked-in file rather than a repository built at test time:
+      the Diff Firewall is a pure function over a parsed diff, so a fixture diff
+      measures exactly what a real one would with no Git in the measurement
+- [x] `small-change-focused` — small task, small diff. The firewall must stay
+      **quiet**: FOCUSED, efficiency ≥ 0.85, and none of the four noise signals
+- [x] `small-change-sprawl` — the same one-line fix delivered as a whole-file
+      reformat, unrelated files and a new dependency. NEEDS_REVIEW at high risk,
+      efficiency ≤ 0.65, mismatch flagged. Written first as `SUSPICIOUS`; the
+      firewall said `NEEDS_REVIEW`, and it was right — §55 requires review, and
+      the expectation was corrected rather than the code
+- [x] `large-change-proportionate` — a genuine payment-module migration. Must
+      **not** be flagged as a mismatch and must have none of its files called
+      unrelated. This is the §50 direction: a large diff is never proof of a
+      wrong one, and a firewall that punishes necessary work gets switched off
+- [x] Each scenario asserts the verdict is *explained*, not just stated
+
+Exit criteria:
+
+- [x] Both failure directions pinned by named scenarios a scoring change would
+      visibly move — the input firewall has had this since Phase 1.5, the output
+      firewall now does too
+- [x] `src/http/client.ts` is deliberately expected **not** to count as
+      unrelated: it imports the changed file and shares the task's vocabulary.
+      Encoding the false alarm as acceptable would have taught the benchmark to
+      accept exactly the noise that makes developers stop reading warnings

@@ -21,21 +21,66 @@ working unless it is.
 | 9 | Optimisation + benchmarks | ✅ |
 | 10 | Optional local AI interfaces + offline guarantee | ✅ interfaces |
 
-379 tests, three golden benchmarks. CLI startup ~180ms; FTS5 search and memory
-lookup ~1ms over 500 memories.
+617 tests. Seven context benchmarks and three change benchmarks. CLI startup
+~180ms; FTS5 search and memory lookup ~1ms over 500 memories.
+
+## 2.0 — in progress
+
+The graph control centre. See [plan.md](plan.md) for the full specification and
+phase order; the short version is that 1.0 built the parts and 2.0 connects
+them into one live view.
+
+| Phase | Contents | State |
+|---|---|---|
+| UI-0 | Audit, stale documentation corrected | ✅ |
+| UI-1 | `events` table + `GET /api/events` over SSE | ✅ |
+| UI-2 | Real worker state; `claimed_worker` on Context Receipts | ✅ |
+| UI-3 | Graph home screen, hand-written SVG | ✅ |
+| UI-4 | Live graph driven by events | ✅ |
+| UI-5 | Activity stream | ✅ |
+| UI-6 | Change Firewall surfaced in the interface | ✅ |
+| UI-7 | Token monitor via `/api/stats` | ✅ |
+| UI-8 | Verification freshness | ✅ |
+| UI-9 | Graph interaction — pan, zoom, drag, collapse | ✅ |
+| UI-10 | Tauri 2 shell — packaging only, never the foundation | ⚠ partial |
+| UI-11 | Cross-worker handoff | ✅ |
+| UI-12 | Benchmarks, including the small-change scenarios | ✅ |
 
 ## Not built
 
-**Tauri desktop shell.** §67 calls it "eventually". The interface runs in a
-browser against the local API today.
+**Tauri desktop shell — written, never compiled.** §67 calls it "eventually",
+and 2.0 keeps it last: it is packaging around the same React interface, not a
+foundation to build on. The interface runs in a browser against the local API
+today, and that path is fully tested.
+
+`packages/desktop/` holds a Tauri 2 crate and `ctxd desktop` starts the API and
+would launch it. The TypeScript half is built and tested. The **Rust half has
+never been compiled or even type-checked**: this machine has no `dlltool`
+(MinGW binutils absent) and no MSVC linker (no Visual Studio or Windows SDK), so
+`cargo build` and `cargo check` both fail inside a dependency's codegen. Treat
+that source as written but entirely unverified.
+
+To finish it, install MinGW binutils or the MSVC build tools, then:
+
+```bash
+cargo build --release --manifest-path packages/desktop/Cargo.toml
+ctxd desktop
+```
+
+Nothing else depends on it. Every other command works with the shell absent,
+which `tests/e2e/desktop.test.ts` asserts.
 
 **An actual local-AI backend.** `@ctxd/ai` is interfaces only. A backend that
 talks to Ollama or llama.cpp belongs behind them, in its own package, opted into
 explicitly — never in the core, where it would quietly make ctxd reach out.
 
-**More benchmark scenarios.** `database-migration`, `payment-flow`,
-`api-refactor` and `frontend-bug` are listed in §26 and would be the highest-value
-contribution: retrieval quality is measured, not argued about. See
+**More benchmark scenarios.** All seven §26 context scenarios exist —
+`auth-migration`, `stripe-webhook`, `vite-build-error`, `database-migration`,
+`payment-flow`, `api-refactor` and `frontend-bug` — alongside three change
+scenarios covering the output firewall: `small-change-focused`,
+`small-change-sprawl` and `large-change-proportionate`. Both runners pick up a
+new fixture directory without any wiring. Further scenarios remain the
+highest-value contribution: quality is measured, not argued about. See
 [benchmarks.md](benchmarks.md) for how to add one.
 
 **Provider tokenizers.** Token counts are a local heuristic, always labelled

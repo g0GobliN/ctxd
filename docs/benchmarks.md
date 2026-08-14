@@ -4,7 +4,14 @@ Retrieval quality is measured, not argued about. That is the point of a
 deterministic engine: the same fixture and the same task produce byte-identical
 output, so a change either improves the numbers or it does not.
 
-## Scenarios
+There are two kinds. **Context scenarios** measure the input firewall: what
+reached the model. **Change scenarios** measure the output firewall: what the
+worker did with it. Both live under `tests/fixtures/benchmarks` and are told
+apart by a `kind` field, which defaults to `context` — retrieval quality and
+edit discipline are the two things ctxd claims to improve, and measuring only
+one would leave half the claim unevidenced.
+
+## Context scenarios
 
 Each scenario is a realistic repository with declared expectations. The runner
 discovers them automatically — a new scenario is a directory with a
@@ -40,6 +47,36 @@ overfitting: domain vocabulary, task phrasing, and where the answer lives.
 - A receipt was produced that accounts for **every** candidate
 - Every included and excluded item carries a reason
 - The whole build is byte-identical on a second run
+
+## Change scenarios
+
+The output firewall, measured the way the input firewall is. A change scenario
+is a directory with `"kind": "change"`, a unified diff, and the verdict the
+firewall is expected to reach.
+
+The diff is a checked-in file rather than a repository built at test time. The
+Diff Firewall is a pure function over a parsed diff, so a fixture diff measures
+exactly what a real one would, with no Git in the measurement.
+
+| Scenario | Task | Tests |
+|---|---|---|
+| `small-change-focused` | Fix the off-by-one in the retry limit | The firewall staying **quiet**: FOCUSED, efficiency ≥ 0.85, none of the noise signals |
+| `small-change-sprawl` | The same fix, delivered as a whole-file reformat plus unrelated files and a new dependency | Small-fix protection (§55): NEEDS_REVIEW at high risk, mismatch flagged, evidence attached |
+| `large-change-proportionate` | Migrate the payment module to the new Stripe client | The §50 direction: a genuinely large, genuinely relevant change must **not** be flagged as a mismatch |
+
+Two scenarios would not be enough, because the Diff Firewall can fail in two
+opposite ways and only one of them is obvious. Missing a sprawling diff is the
+failure people expect. Warning about a necessary one is the failure that gets
+the tool switched off — so `large-change-proportionate` exists specifically to
+fail if the scoring is tightened until honest work trips it.
+
+`small-change-sprawl` was written expecting `SUSPICIOUS`. The firewall returned
+`NEEDS_REVIEW`, and it was right: §55 says a small task with a large change must
+*require review*. The expectation was corrected, not the code. The scenario also
+deliberately expects `src/http/client.ts` **not** to count as unrelated — it
+imports the changed file and shares the task's vocabulary, and encoding that
+false alarm as acceptable would have taught the benchmark to accept exactly the
+noise that makes developers stop reading warnings.
 
 ## Results
 

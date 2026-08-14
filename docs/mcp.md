@@ -9,8 +9,15 @@ only when a worker is connected.
 ## Running it
 
 ```bash
-ctxd mcp --dir /path/to/project
+ctxd mcp --dir /path/to/project --worker claude
 ```
+
+`--worker` names which worker this server is wired up to, so its activity can be
+attributed in the interface. ctxd **cannot verify the name**: the transport shows
+that a client attached, not what it is, and any local process could claim to be
+Claude. The name is recorded as a claim — the same treatment `worker_statement`
+gets below — and without it, activity is recorded with no worker rather than a
+guessed one. See [events.md](events.md).
 
 The server speaks JSON-RPC on stdin/stdout, so nothing else may write to stdout
 while it runs.
@@ -52,7 +59,7 @@ in with the real path.
 | `ctx_task_get` | List open tasks, or fetch one with its subtasks |
 | `ctx_task_update` | Move a task's status, priority or assignee |
 | `ctx_checkpoint` | Record where the work stands |
-| `ctx_handoff` | Everything another worker needs to continue |
+| `ctx_handoff` | Everything another worker needs to continue; `accept` moves the work |
 
 A tool is added only once the service behind it exists. The four work tools
 above were withheld through Phase 5 for exactly that reason: a tool that cannot

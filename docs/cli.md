@@ -88,7 +88,7 @@ those files change. See [memory.md](memory.md).
 | `ctxd task` | Track units of work |
 | `ctxd session` | Track a working session |
 | `ctxd checkpoint` | Record where the work stands |
-| `ctxd handoff` | Everything another worker needs |
+| `ctxd handoff` | Everything another worker needs; `--to <w> --accept` actually moves the work |
 | `ctxd resume` | What was I doing? |
 
 See [work.md](work.md).
@@ -118,9 +118,10 @@ Neither writes to Git. See [diff-firewall.md](diff-firewall.md) and
 |---|---|
 | `ctxd mcp` | Run the MCP server |
 | `ctxd ui` | Serve the local API and interface |
+| `ctxd desktop` | The same interface in a window — needs the Tauri shell built ([ui.md](ui.md)) |
 
 ```bash
-claude mcp add ctxd -- ctxd mcp --dir /path/to/project
+claude mcp add ctxd -- ctxd mcp --dir /path/to/project --worker claude
 ctxd ui --print-token
 ```
 

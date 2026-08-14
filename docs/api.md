@@ -50,10 +50,16 @@ nosniff` and `Cache-Control: no-store` — the API answers data, never markup.
 | `GET` | `/api/memory?q=&limit=` | — | FTS5 search, or a project's memories |
 | `GET` | `/api/tasks?project=` | — | Tasks |
 | `GET` | `/api/session?project=` | — | Last session and latest checkpoint |
+| `GET` | `/api/workers?project=` | — | Workers, with state derived from recorded sessions |
+| `GET` | `/api/config` | — | Configuration file path, storage directory and current values |
 | `GET` | `/api/resume?project=&dir=` | — | The "what was I doing?" summary |
 | `GET` | `/api/receipts/context?limit=` | — | Context Receipts, newest first |
 | `GET` | `/api/receipts/change?limit=` | — | Change Receipts, newest first |
 | `GET` | `/api/diff?dir=&task=` | — | A live Change Receipt for a working tree |
+| `GET` | `/api/stats?window=&limit=` | — | Token and change statistics — `window` is `today`, `7d`, `30d` or `all` |
+| `GET` | `/api/graph?project=` | — | The engineering graph: core, workers, memory, repository, verification |
+| `GET` | `/api/events?after=` | — | Live event stream (SSE) — see [events.md](events.md) |
+| `GET` | `/api/events/recent?limit=` | — | Recent events as JSON, newest first |
 | `POST` | `/api/context` | ✔ | Build context for a task; returns the receipt |
 
 `POST /api/context` requires the token because it writes a receipt, even though
@@ -79,8 +85,37 @@ Errors are JSON with a stated reason, never an empty success:
 | `405` | Known path, wrong method |
 | `413` | Body over 1 MB |
 
+## `/api/stats`
+
+The aggregation is `@ctxd/stats` — the same module `ctxd stats` runs — so the
+interface and the command cannot report different totals for the same receipts.
+The window names are defined there too, so there is one definition of `7d`
+rather than one per caller.
+
+The response echoes what it covers, because a figure whose scope is implied by
+whichever tab is highlighted is a figure waiting to be misread:
+
+```json
+{
+  "window": "7d",
+  "scope": "last 7 days",
+  "since": "2026-08-07T09:14:02.118Z",
+  "context": { "requests": 12, "candidateTokens": 422903, "avoidedTokens": 414911,
+               "accuracy": "estimated" },
+  "change": { "reviews": 3, "meanEfficiency": 0.81 },
+  "unreadable": []
+}
+```
+
+`unreadable` lists receipt files that could not be parsed. They are missing from
+the totals above it, and saying so is what keeps an incomplete number from
+passing as a wrong one. `meanEfficiency` is absent rather than `0` when nothing
+has been reviewed — zero would claim every change was unfocused.
+
+An undefined window is a `400`, not a guess.
+
 ## Status
 
-The API is built and tested. The React interface that consumes it (§68–71 —
-context inspector, memory viewer, task kanban, worker monitor, Git overview) is
-not yet built.
+The API is built and tested, and the React interface that consumes it is built
+too — see [ui.md](ui.md) for the panels it serves. Every route in the table
+above is live; the interface performs no aggregation of its own.
