@@ -71,8 +71,11 @@ jobs:
       - name: Rust tests
         run: cargo test --release --manifest-path packages/desktop/Cargo.toml
 
+      # The Tauri CLI is a workspace-root devDependency, so from this directory
+      # it is two levels up. Naming `node_modules/...` relative to the working
+      # directory is what failed on Linux and macOS.
       - name: Build installers
-        run: node node_modules/@tauri-apps/cli/tauri.js build
+        run: node ../../node_modules/@tauri-apps/cli/tauri.js build
         working-directory: packages/desktop
 
       - name: Collect installers

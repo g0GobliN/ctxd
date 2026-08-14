@@ -53,19 +53,42 @@ function targetVersion(): string {
 }
 
 /**
- * Run a command without a shell.
+ * Run a command.
  *
- * On Windows `npm` is a `.cmd` shim, which cannot be executed directly — so the
- * shim is named explicitly rather than reaching for `shell: true`. A shell would
- * concatenate these arguments rather than escape them (DEP0190), and one of them
- * is a version string that comes from a file.
+ * On Windows `npm` is a `.cmd` shim, and Node 24 refuses to spawn one directly
+ * — `EINVAL, syscall: spawnSync npm.cmd`, from the fix for CVE-2024-27980. So
+ * it goes through `cmd.exe /c`, which is the interpreter such a shim needs.
+ *
+ * That reintroduces a shell, and a shell concatenates rather than escapes, so
+ * the one argument not written here — the version, which comes from a file — is
+ * validated before it can reach it.
  */
 function run(command: string, args: readonly string[], cwd: string): void {
-  const executable = process.platform === "win32" ? `${command}.cmd` : command;
-  execFileSync(executable, args as string[], { cwd, stdio: "inherit" });
+  if (process.platform === "win32") {
+    execFileSync("cmd.exe", ["/c", command, ...args], { cwd, stdio: "inherit" });
+    return;
+  }
+  execFileSync(command, args as string[], { cwd, stdio: "inherit" });
 }
 
-const version = targetVersion();
+/**
+ * Reject a version that is not one.
+ *
+ * `--version=` is taken from the command line and the fallback is read from a
+ * manifest, and on Windows the value reaches `cmd.exe`. Anything outside the
+ * character set a version can legitimately use is refused rather than escaped:
+ * a rule about what is allowed is easier to be sure of than a rule about what
+ * to escape.
+ */
+function assertVersion(version: string): string {
+  if (!/^[0-9A-Za-z.+-]+$/.test(version)) {
+    console.error(`staging failed: ${JSON.stringify(version)} is not a valid version`);
+    process.exit(1);
+  }
+  return version;
+}
+
+const version = assertVersion(targetVersion());
 console.log(`staging ctxd@${version} for ${process.platform}-${process.arch}`);
 
 rmSync(sidecar, { recursive: true, force: true });
