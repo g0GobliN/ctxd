@@ -102,3 +102,10 @@ export {
   type DiffAnalysis,
   type WorkingTreeAnalysis,
 } from "./analyze.js";
+
+export {
+  verificationFreshness,
+  type Freshness,
+  type FreshnessInput,
+  type FreshnessReport,
+} from "./freshness.js";
